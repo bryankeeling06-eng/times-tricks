@@ -10,7 +10,7 @@
 <title>Times Tricks — Multiplication Street Runner</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<link rel="stylesheet" href="style.css?v=2" />
+<link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
 <div id="app">
@@ -47,6 +47,7 @@
     <div class="panel">
       <h1 class="logo">TIMES<span>TRICKS</span></h1>
       <p class="sub">Answer fast. Land tricks. Don't wipe out.</p>
+      <div id="pilotBanner" class="pilotBanner hidden"></div>
 
       <h2>Pick your ride</h2>
       <div id="riderPick" class="riders"></div>
@@ -62,6 +63,16 @@
 
       <button id="startBtn" class="big">DROP IN ▶</button>
       <p id="practiceNote" class="note"></p>
+    </div>
+  </div>
+
+  <!-- Expired preview link (see pilot/until handling at the bottom of game.js) -->
+  <div id="pilotEnded" class="overlay">
+    <div class="panel small expired">
+      <div class="expIcon">🛹</div>
+      <h2 class="endTitle">LINK EXPIRED</h2>
+      <p class="expMsg">This preview link has expired.</p>
+      <p class="note">Thanks for riding Times Tricks! Ask the person who shared it for a new link.</p>
     </div>
   </div>
 
@@ -89,6 +100,6 @@
     <div class="panel small"><h2 class="endTitle">PAUSED</h2><button id="resumeBtn" class="big">RESUME ▶</button></div>
   </div>
 </div>
-<script src="game.js?v=2"></script>
+<script src="game.js?v=3"></script>
 </body>
 </html>

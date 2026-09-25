@@ -14,6 +14,14 @@ Plain static HTML/CSS/JS with no build step, no external requests, no ads, no tr
 4. About 1 in 4 tricks is a **rail grind**: a rail pops up, you ollie onto it, slide with sparks, and hop off. Skateboard: 50-50 or boardslide. Scooter: feeble or 50-50. On a streak of 3+ a grind adds a small bonus (+50 × multiplier).
 5. Rounds last 75 seconds. Streaks raise the multiplier (x2 at 3, x3 at 6, x4 at 9, x5 at 12) and speed things up slightly.
 
+## Preview links that expire
+
+Same style as Math Trail's pilot links: add `?pilot=<name>&until=YYYY-MM-DD`.
+
+- Example: `https://bryankeeling06-eng.github.io/times-tricks/?pilot=preview&until=2026-09-29`
+- The link plays through **11:59:59 PM US Central time** on the `until` date, then shows a "This preview link has expired" screen instead of the game. An open tab is re-checked every 30 s (between rounds).
+- If `pilot` or a valid `until` is missing, the game plays normally. The bare URL is **not** locked (same as Math Trail), so this is a soft, client-side expiry, not access control.
+
 ## Levels
 
 1. Tables 2–5

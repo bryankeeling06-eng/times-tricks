@@ -474,6 +474,7 @@
 
   // ---------- round flow ----------
   function startRound() {
+    if (pilotExpired()) { showPilotEnded(); return; }
     audio();
     G.screen = 'play'; G.score = 0; G.streak = 0; G.topStreak = 0; G.correct = 0; G.wrong = 0; G.timeLeft = ROUND_SECONDS;
     G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false; G.sinceGrind = 0; G.lastWasGrind = false;
@@ -661,6 +662,7 @@
   function chooseIdx(i) { if (G.phase === 'ask' && G.choices[i] != null) submit(G.choices[i]); }
 
   document.addEventListener('keydown', function (e) {
+    if (G.screen === 'expired') return;
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen !== 'play') return;
@@ -742,6 +744,48 @@
     try { update(dt); render(); if (G.screen === 'menu') drawPreviews(); } catch (err) { console.error(err); }
     requestAnimationFrame(frame);
   }
+  // ===== PILOT / PREVIEW LINK GATE =====
+  // Same style as Math Trail: ?pilot=<name>&until=YYYY-MM-DD. The link works through the END of the
+  // `until` day in US Central time (America/Chicago), then shows an "expired" screen instead of the game.
+  // Without both params (or with a malformed date) the game plays normally, exactly like Math Trail.
+  var PILOT_TZ = 'America/Chicago';
+  function tzOffsetMs(ms, tz) { // (wall-clock time in tz) - UTC, in ms
+    var f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    var p = {}; f.formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; });
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000;
+  }
+  function parseUntil(raw) {
+    if (!raw) return null;
+    var m = String(raw).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], chk = new Date(Date.UTC(y, mo - 1, d));
+    if (chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) return null;
+    var nextMidnightUTC = Date.UTC(y, mo - 1, d + 1, 0, 0, 0), off;
+    try { off = tzOffsetMs(nextMidnightUTC - 6 * 3600e3, PILOT_TZ); } catch (e) { off = -5 * 3600e3; } // fallback CDT
+    return { ms: nextMidnightUTC - off - 1, y: y, mo: mo, d: d };   // 23:59:59.999 Central on the until day
+  }
+  var pilot = null;
+  (function () {
+    var q; try { q = new URLSearchParams(window.location.search || ''); } catch (e) { return; }
+    var name = q.get('pilot'), until = parseUntil(q.get('until'));
+    if (name && until) pilot = { name: name, until: until };
+  })();
+  function pilotExpired() { return !!pilot && Date.now() > pilot.until.ms; }
+  function showPilotEnded() {
+    G.screen = 'expired'; setPhase('idle');
+    [el.menu, el.end, el.pause].forEach(function (o) { o.classList.remove('show'); });
+    el.banner.className = 'hide'; $('#pilotEnded').classList.add('show');
+  }
+  function pilotLabel() {
+    var u = pilot.until, dt = new Date(Date.UTC(u.y, u.mo - 1, u.d, 12));
+    var s; try { s = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { s = u.mo + '/' + u.d; }
+    return 'Preview link · plays through ' + s + ' (Central time)';
+  }
+  window.__tt.pilot = function () { return pilot && { name: pilot.name, untilISO: new Date(pilot.until.ms).toISOString(), expired: pilotExpired() }; };
+  if (pilot && !pilotExpired()) { var pb = $('#pilotBanner'); pb.textContent = pilotLabel(); pb.classList.remove('hidden'); }
+  // re-check every 30s so an open tab stops at the deadline (between rounds, never mid-round)
+  if (pilot) setInterval(function () { if (pilotExpired() && G.screen !== 'play' && G.screen !== 'expired') showPilotEnded(); }, 30000);
+
   buildMenu(); refreshMenu(); applyMode(); resize(); updateHUD(); el.banner.className = 'hide';
+  if (pilotExpired()) showPilotEnded();
   requestAnimationFrame(frame);
 })();
