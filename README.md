@@ -11,7 +11,8 @@ Plain static HTML/CSS/JS with no build step, no external requests, no ads, no tr
 1. Pick a ride, a level, and an answer mode (number pad or 3 choices).
 2. Tap **Drop In** (or press Enter).
 3. Type the answer on the pad (or keyboard digits + Enter) before the gate bar runs out. In choices mode tap an answer (or press 1 / 2 / 3).
-4. Rounds last 75 seconds. Streaks raise the multiplier (x2 at 3, x3 at 6, x4 at 9, x5 at 12) and speed things up slightly.
+4. About 1 in 4 tricks is a **rail grind**: a rail pops up, you ollie onto it, slide with sparks, and hop off. Skateboard: 50-50 or boardslide. Scooter: feeble or 50-50. On a streak of 3+ a grind adds a small bonus (+50 × multiplier).
+5. Rounds last 75 seconds. Streaks raise the multiplier (x2 at 3, x3 at 6, x4 at 9, x5 at 12) and speed things up slightly.
 
 ## Levels
 
@@ -29,7 +30,7 @@ Plain static HTML/CSS/JS with no build step, no external requests, no ads, no tr
 
 ## Adding a new rider
 
-Add an entry to `RIDERS` in `game.js`: colours, a `stance` (foot/hip/hand positions), a list of `tricks`, and a `drawVehicle(ctx, pose, rider)` function. The picker, saving, and gameplay pick it up automatically.
+Add an entry to `RIDERS` in `game.js`: colours, a `stance` (foot/hip/hand positions), a list of `tricks`, optional `grinds` (with the rail contact height), and a `drawVehicle(ctx, pose, rider)` function. The picker, saving, and gameplay pick it up automatically.
 
 ## Files
 

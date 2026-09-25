@@ -33,6 +33,11 @@
         { id: 'ollie', name: 'OLLIE' }, { id: 'kickflip', name: 'KICKFLIP' },
         { id: 'shuvit', name: 'SHOVE-IT' }, { id: 'heelflip', name: 'HEELFLIP' }
       ],
+      // grinds: contact = local height (rider units) of the part that sits on the rail
+      grinds: [
+        { id: 'g5050', name: '50-50 GRIND', grind: true, contact: 6, style: { boardRot: 0, bodyRot: -0.05 } },
+        { id: 'gboard', name: 'BOARDSLIDE', grind: true, contact: 8, style: { spinX: 0.26, bodyRot: -0.1, px: -2 } }
+      ],
       drawVehicle: drawSkateboard
     },
     {
@@ -42,6 +47,10 @@
       tricks: [
         { id: 'hop', name: 'BUNNY HOP' }, { id: 'tailwhip', name: 'TAILWHIP' },
         { id: 'barspin', name: 'BAR SPIN' }, { id: 'threesixty', name: '360' }
+      ],
+      grinds: [
+        { id: 'gfeeble', name: 'FEEBLE GRIND', grind: true, contact: 5, style: { boardRot: -0.13, bodyRot: -0.08 } },
+        { id: 's5050', name: '50-50 GRIND', grind: true, contact: 7, style: { boardRot: 0, bodyRot: -0.04 } }
       ],
       drawVehicle: drawScooter
     }
@@ -135,6 +144,7 @@
     trick: null, trickT: 0, wipeT: -1, particles: [], pops: [], t: 0
   };
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
+  window.__tt.forceGrind = false;
 
   function level() { return LEVELS[settings.level - 1]; }
   function rider() { return riderById(settings.rider); }
@@ -393,6 +403,52 @@
     }
     return pose;
   }
+  // ---------- grinds ----------
+  // Timeline (seconds): pop 0-0.12, ollie up 0.12-0.28, slide 0.28-0.68, hop off 0.68-0.92.
+  var GRIND = { pop: 0.12, land: 0.28, off: 0.68, done: 0.92, phase: 0.98, railH: 34, chance: 0.24, pity: 4, streakBonus: 50 };
+  function grindTravel(t) { // distance covered since grind start
+    var v = G.grindV, s = G.speed; if (t <= 0.7) return v * t;
+    var u = Math.min(t - 0.7, 0.3); return v * 0.7 + v * u + (s - v) * u * u / 0.6 + (t > 1 ? s * (t - 1) : 0);
+  }
+  function startGrind() {
+    G.grindV = clamp(G.gateDist / 0.5, G.speed, G.speed * 2.2);
+    G.grindTrav = 0;
+    G.railL = grindTravel(GRIND.land) - 18;   // rail in "travel" coords, rider contact = 0
+    G.railR = grindTravel(GRIND.off) + 18;
+  }
+  function grindPose(g, t) {
+    var A = GRIND.railH / RIDER_SCALE - g.contact, st = g.style, pose = { crouch: 0.4 }, k = 0;
+    if (t < GRIND.pop) { pose.crouch = 0.3 + t / GRIND.pop * 0.7; pose.air = 0; }
+    else if (t < GRIND.land) { var u = (t - GRIND.pop) / (GRIND.land - GRIND.pop); pose.air = A * easeOut(u) + Math.sin(Math.PI * u) * 12; pose.boardRot = -0.35 * Math.sin(Math.PI * u); k = u; pose.armsUp = 0.3 * u; }
+    else if (t < GRIND.off) { pose.air = A + Math.sin(t * 90) * 0.35; pose.crouch = 0.5; k = 1; pose.armsUp = 0.35; }
+    else if (t < GRIND.done) { var w = (t - GRIND.off) / (GRIND.done - GRIND.off); pose.air = A * (1 - w) + Math.sin(Math.PI * w) * 16; k = Math.max(0, 1 - w * 2.5); pose.boardRot = w < 0.4 ? -0.3 * Math.sin(Math.PI * w / 0.4) : 0; pose.crouch = w > 0.8 ? 0.7 : 0.35; pose.armsUp = 0.3 * (1 - w); }
+    else { pose.air = 0; pose.crouch = 0.5; }
+    if (k > 0) {
+      if (st.spinX != null) pose.spinX = 1 + (st.spinX - 1) * k;
+      if (st.boardRot) pose.boardRot = (pose.boardRot || 0) * (1 - k) + st.boardRot * k;
+      if (st.bodyRot) pose.bodyRot = st.bodyRot * k;
+      if (st.px) pose.px = st.px * k;
+    }
+    return pose;
+  }
+  function drawRail(rx) {
+    var a = rx + (G.railL - G.grindTrav), b = rx + (G.railR - G.grindTrav), y = GROUND_Y - GRIND.railH;
+    if (b < -20 || a > VW + 20) return;
+    ctx.save(); ctx.globalAlpha = clamp(G.trickT / 0.08, 0, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(a, GROUND_Y - 2, b - a, 3);
+    ctx.fillStyle = '#1a1030';
+    var n = Math.max(2, Math.round((b - a) / 55));
+    for (var i = 0; i <= n; i++) { var px = a + 6 + (b - a - 12) * i / n; ctx.fillRect(px - 2.5, y, 5, GRIND.railH - 2); ctx.fillRect(px - 6, GROUND_Y - 4, 12, 3); }
+    ctx.fillStyle = '#b8bccf'; ctx.fillRect(a, y - 2, b - a, 5);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(a, y - 2, b - a, 1.4);
+    ctx.fillStyle = '#ff7a3d'; ctx.fillRect(a, y + 2, b - a, 1.2);
+    ctx.fillStyle = '#6f7390'; ctx.fillRect(a - 1, y - 3, 3, 7); ctx.fillRect(b - 2, y - 3, 3, 7);
+    ctx.restore();
+  }
+  function sparks(x, y, n) {
+    for (var i = 0; i < n; i++) G.particles.push({ x: x + (Math.random() - 0.5) * 16, y: y, vx: -60 - Math.random() * 140, vy: -40 - Math.random() * 90, life: 0.25 + Math.random() * 0.25, t: 0, c: pick(['#fff3b0', '#ffc94d', '#ff9a3d', '#ffffff']), r: 1.8 + Math.random() * 2 });
+  }
+
   function wipePose(p) {
     var hit = clamp(p / 0.22, 0, 1), rec = clamp((p - 0.78) / 0.22, 0, 1);
     var fall = easeOut(hit) * (1 - rec);
@@ -420,7 +476,7 @@
   function startRound() {
     audio();
     G.screen = 'play'; G.score = 0; G.streak = 0; G.topStreak = 0; G.correct = 0; G.wrong = 0; G.timeLeft = ROUND_SECONDS;
-    G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false;
+    G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false; G.sinceGrind = 0; G.lastWasGrind = false;
     el.menu.classList.remove('show'); el.end.classList.remove('show'); el.pause.classList.remove('show');
     setPhase('ready'); el.banner.className = ''; el.prompt.textContent = 'READY…'; el.gateBar.style.width = '0%';
     clearInput(); updateHUD(); applyMode();
@@ -449,9 +505,17 @@
     var p = G.prob, frac = clamp(G.gateDist / G.gateTotal, 0, 1);
     G.streak++; G.topStreak = Math.max(G.topStreak, G.streak); G.correct++;
     var m = multiplier(), pts = Math.round((100 + Math.round(frac * 100)) * m);
-    G.score += pts; recordHit(p);
-    var r = rider(); G.trick = G.streak < 3 ? r.tricks[0] : pick(r.tricks.slice(1)); G.trickT = 0;
+    var r = rider(), grinds = r.grinds || [];
+    var doGrind = grinds.length && G.lastWasGrind !== true && (window.__tt.forceGrind || Math.random() < GRIND.chance || G.sinceGrind >= GRIND.pity);
+    if (doGrind) {
+      G.trick = pick(grinds); G.sinceGrind = 0; G.lastWasGrind = true;
+      if (G.streak >= 3) pts += GRIND.streakBonus * m;   // small grind bonus on longer streaks
+    } else {
+      G.trick = G.streak < 3 ? r.tricks[0] : pick(r.tricks.slice(1)); G.sinceGrind = (G.sinceGrind || 0) + 1; G.lastWasGrind = false;
+    }
+    G.score += pts; recordHit(p); G.trickT = 0;
     G.gateState = 'good'; G.boostSpeed = Math.max(G.speed, G.gateDist / 0.38);
+    if (G.trick.grind) startGrind();
     el.banner.className = 'right'; flashDisplay('flashR');
     if (settings.mode === 'choices') el.choices.forEach(function (b) { if (Number(b.textContent) === p.answer) b.classList.add('good'); });
     pop('+' + pts + '  ' + G.trick.name, '#ffc94d');
@@ -459,7 +523,7 @@
     sfx.good(); setPhase('boost'); updateHUD();
   }
   function onWrong(reason, val) {
-    var p = G.prob; G.streak = 0; G.wrong++; recordMiss(p);
+    var p = G.prob; G.streak = 0; G.wrong++; recordMiss(p); G.lastWasGrind = false;
     if (!G.roundMissed.some(function (f) { return f.key === p.key; })) G.roundMissed.push({ key: p.key, text: p.reveal });
     G.gateState = 'bad'; G.wipeT = 0; G.trick = null;
     el.banner.className = 'wrong'; el.prompt.innerHTML = p.revealHTML; flashDisplay('flashW');
@@ -494,7 +558,8 @@
     G.phaseT += dt;
     var spd = G.screen === 'play' ? G.speed : BASE_SPEED * 0.8;
     if (playing) {
-      G.timeLeft -= dt;
+      // grinds run slightly longer than other tricks; don't charge the round clock for the extra
+      if (!(G.phase === 'boost' && G.trick && G.trick.grind && G.phaseT > 0.85)) G.timeLeft -= dt;
       if (G.timeLeft <= 0) { G.timeLeft = 0; updateHUD(); endRound(); return; }
       if (G.phase === 'ready') {
         G.speed = BASE_SPEED; if (G.phaseT > 0.6 && el.prompt.textContent !== 'GO!') { el.prompt.textContent = 'GO!'; sfx.go(); }
@@ -502,6 +567,15 @@
       } else if (G.phase === 'ask') {
         G.gateDist -= G.speed * dt; el.gateBar.style.width = (clamp(G.gateDist / G.gateTotal, 0, 1) * 100) + '%';
         if (G.gateDist <= 0) { G.gateDist = 0; onWrong('time'); }
+      } else if (G.phase === 'boost' && G.trick && G.trick.grind) {
+        var t0 = G.trickT; G.trickT += dt;
+        var d = grindTravel(G.trickT) - grindTravel(t0); spd = d / dt;
+        G.grindTrav += d; G.gateDist -= d;
+        if (G.gateDist <= 0 && !G.passed) { G.passed = true; burst(riderX() + 10, GROUND_Y - 70, 18, ['#19c3c0', '#ffc94d', '#ff4f8b', '#fff'], 110); }
+        if (G.trickT > GRIND.land && G.trickT < GRIND.off) sparks(riderX() - 10, GROUND_Y - GRIND.railH, 4);
+        if (G.trickT >= GRIND.land && t0 < GRIND.land) { sparks(riderX(), GROUND_Y - GRIND.railH, 10); tone(1400, 0.05, 'square', 0.03); }
+        if (G.gateDist > 0 && G.phaseT > 0.7) G.gateFade = Math.max(0, 1 - (G.phaseT - 0.7) / 0.25);
+        if (G.phaseT > GRIND.phase) { G.passed = false; G.trick = null; newProblem(); }
       } else if (G.phase === 'boost') {
         spd = G.gateDist > 0 ? G.boostSpeed : G.speed + (G.boostSpeed - G.speed) * Math.max(0, 1 - G.phaseT * 3);
         G.gateDist -= spd * dt; G.trickT += dt;
@@ -535,8 +609,10 @@
       var gx = rx + 12 + G.gateDist;
       if (gx < VW + 80 && gx > -80) drawGate(gx);
     }
+    if (G.phase === 'boost' && G.trick && G.trick.grind) drawRail(rx);
     var r = rider(), pose;
     if (G.phase === 'wipe' && G.wipeT >= 0) pose = wipePose(clamp(G.wipeT / 1.7, 0, 1));
+    else if (G.trick && G.phase === 'boost' && G.trick.grind) pose = grindPose(G.trick, G.trickT);
     else if (G.trick && G.phase === 'boost') pose = trickPose(G.trick.id, clamp(G.trickT / 0.8, 0, 1));
     else pose = idlePose(G.t);
     drawRider(ctx, rx, GROUND_Y, RIDER_SCALE, r, pose);
