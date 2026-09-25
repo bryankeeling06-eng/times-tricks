@@ -35,12 +35,38 @@ Same style as Math Trail's pilot links: add `?pilot=<name>&until=YYYY-MM-DD`.
 In-game coins only. No real money, no purchases, no accounts, nothing leaves the device.
 
 - **Earning** (added at the end of a finished round; quitting early forfeits them): 2 per correct answer, +1 per multiplier step above x1 (so a x3 answer gives 4), +3 per grind, +5 for 80%+ accuracy with 8+ answers, +10 for a new personal best. A decent 75-second round earns ~50–70 coins.
-- **Shop** (start screen → GEAR SHOP): Shirts, Helmets, Boards (skateboard only), Scooters (scooter only). Defaults are free and owned. Buy, then Equip. Every card shows a live preview of the rider using that item. Equipped gear shows in gameplay, tricks, grinds, wipeouts and the rider picker.
-- **Milestone items** are locked until an achievement, then bought with coins:
-  - Gold Jersey: 20-answer streak
-  - Chrome Dome helmet: score 6,000+ on Level 3
-  - Galaxy Deck and Rail Spark scooter: land 10 grinds (finished rounds)
-  - Gold Rush scooter: finish a Level 5 round with 80%+ accuracy (8+ answers)
+- **Shop** (start screen → GEAR SHOP): Shirts, Helmets, Boards (skateboard only), Scooters (scooter only), BMX (frame + tire colours). Defaults are free and owned. Buy, then Equip. Every card shows a live preview of the rider using that item. Equipped gear shows in gameplay, tricks, grinds, wipeouts, the rider picker and snapshots.
+- **Goal items** are locked until their goal is done (see Goals below), then bought with coins.
+
+## Goals, places and rides
+
+**★ GOALS** on the start screen lists every goal grouped Easy / Medium / Big, with a progress bar ("Grinds: 7 / 10"), a picture of the reward, and a ✓ when done. Progress only counts **finished** rounds. When a round unlocks something, the end screen shows an **UNLOCKED!** banner.
+
+| Tier | Goal | Reward |
+|---|---|---|
+| Easy | Hit your first 5-streak | Sky Tee (shirt, 30) |
+| Easy | Play 3 rounds | Mint Racer (helmet, 30) |
+| Easy | Land your first grind | Sunrise Tee (shirt, 35) |
+| Easy | Land 10 grinds | Galaxy Deck (board), Rail Spark (scooter) |
+| Easy | Play 10 rounds | **Beach Boardwalk** place |
+| Medium | 90%+ accuracy on any level (8+ answers) | Camo helmet (170) |
+| Medium | Finish a round on every level (1–5) | Flame Wheels board (170) |
+| Medium | Hit a 15-streak | **BMX** ride |
+| Medium | Land 25 grinds | Neon Bars scooter (180) |
+| Medium | Hit a 20-streak | Gold Jersey |
+| Medium | Level 5 round with 80%+ accuracy (8+ answers) | Gold Rush scooter |
+| Medium | Score 6,000+ on Level 3 | Chrome Dome helmet |
+| Big | Hit a 30-streak | Holo Deck (board, 300), Holo Frame (BMX, 300) |
+| Big | Perfect Level 5 round (100%, 8+ answers) | Diamond helmet (300), Royal Gold scooter (300) |
+| Big | Land 50 grinds | **Neon Night City** place |
+
+**Places** (start screen → PLACE): Sunset Street (default), Beach Boardwalk (sand, ocean, pier, lifeguard towers, daytime) and Neon Night City (dark sky, neon signs, glowing rails). Places only change the background, props and colours. Gameplay is identical. Snapshot cards use the place you were riding in.
+
+**Rides:** Skateboard, Scooter, and BMX (unlocked by the 15-streak goal). BMX tricks: Bunny Hop, Tabletop, Bar Spin, 360, Tailwhip. BMX grinds: Double-Peg Grind, Feeble Grind. The snapshot "no repeat" rule works per ride.
+
+**Adding a goal:** add an object to `GOALS` in `game.js`: `{ id, tier: 'easy'|'medium'|'big', text, label, unit?, progress: function (stats) { return [current, target]; } }`. Put `unlock: '<goal id>'` on any gear item, place or rider to make that goal its reward. Stats come from `getStats()` (saved in `tt_stats` at the end of each finished round in `endRound`); add a new counter there if you need one.
+
+**Adding a place:** add an entry to `PLACES` (`{ id, name, unlock?, draw: function (t) {...}, railGlow? }`). The draw function paints the sky/background/props for the current camera (`G.worldX`); see `drawBeach` / `drawNight`. The picker thumbnails and snapshot cards use it automatically.
 
 ### Adding gear
 
@@ -48,8 +74,8 @@ Everything is data in `game.js`:
 
 - **New item:** add one object to `GEAR`, e.g.
   `{ id: 'shirt_orange', cat: 'shirt', name: 'Traffic Cone', price: 70, color: '#ff7a3d', dark: '#c2521f' }`.
-  Look fields per category: shirts `color, dark, stripe?, glow?`; helmets `color, pattern, accent?` (`none, stripe, double, bolt, star, checker, flames, chrome, spikes`); boards/scooters `deck, wheel, pattern?, accent?, wheelGlow?` plus `bar` for scooters (`none, stripe, split, checker, flames, stars`).
-- **Lock it behind a milestone:** add `unlock: '<achievement id>'`. Achievements live in `ACHIEVEMENTS` (text + a `progress(stats)` returning `[current, goal]`).
+  Look fields per category: shirts `color, dark, stripe?, glow?`; helmets `color, pattern, accent?` (`none, stripe, double, bolt, star, checker, flames, chrome, spikes, camo, diamond`); boards/scooters `deck, wheel, pattern?, accent?, wheelGlow?` plus `bar`/`barGlow` for scooters (`none, stripe, split, checker, flames, stars, holo`); BMX items use `frame, tire, framePattern?, frameAccent?`.
+- **Lock it behind a goal:** add `unlock: '<goal id>'` (goals live in `GOALS`).
 - **New category:** add to `GEAR_CATS`. A category with `rider: '<id>'` applies to that ride; set `gearCat` on the rider.
 - **Coin tuning:** the `COINS` object.
 
@@ -62,14 +88,14 @@ Everything is data in `game.js`:
 
 ## Saved in the browser (localStorage, `tt_` prefix)
 
-- Chosen rider, level, and answer mode
-- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), milestone stats (`tt_stats`), snapshot album (`tt_album`)
+- Chosen rider (`tt_rider`), place (`tt_place`), level, and answer mode (a locked or unknown saved rider/place falls back to Skateboard / Sunset Street)
+- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), goal stats (`tt_stats`: best streak, grinds, rounds, levels finished, best accuracy, Level 5 results; older saves are migrated, with levels finished rebuilt from personal bests), snapshot album (`tt_album`)
 - Personal best per level (`tt_best_<level>`)
 - Missed facts (`tt_missed`): missed facts come back more often in later rounds until you get them right a few times. The end screen lists them under "Facts to practice".
 
 ## Adding a new rider
 
-Add an entry to `RIDERS` in `game.js`: colours, a `stance` (foot/hip/hand positions), a list of `tricks`, optional `grinds` (with the rail contact height), and a `drawVehicle(ctx, pose, rider)` function. The picker, saving, and gameplay pick it up automatically.
+Add an entry to `RIDERS` in `game.js`: colours, a `stance` (foot/hip/hand positions), a list of `tricks`, optional `grinds` (with the rail contact height), and a `drawVehicle(ctx, pose, rider)` function. Optional `gearCat` (its shop category) and `unlock` (a goal id). The picker, shop, saving, snapshots and gameplay pick it up automatically.
 
 ## Files
 

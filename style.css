@@ -81,10 +81,10 @@ body.locked #controls button{opacity:.55}
 .logo span{display:block;font-size:52px;background:linear-gradient(#8ff5ee,#19c3c0);-webkit-background-clip:text;background-clip:text;color:transparent}
 .sub{text-align:center;color:var(--muted);margin:6px 0 10px;font-weight:600;font-size:14px}
 h2{font-size:12px;letter-spacing:.16em;color:var(--muted);margin:14px 0 6px;text-transform:uppercase}
-.riders{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.riders{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rider{border:2px solid #3a2a5e;background:var(--panel2);border-radius:16px;padding:6px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:2px}
-.rider canvas{width:100%;height:92px;border-radius:10px;display:block}
-.rider span{font-weight:800;font-size:16px}
+.rider canvas{width:100%;height:84px;border-radius:10px;display:block}
+.rider span{font-weight:800;font-size:14px;white-space:nowrap}
 .rider.sel{border-color:var(--teal);box-shadow:0 0 0 2px rgba(25,195,192,.25),0 0 18px rgba(25,195,192,.35)}
 .levels{display:flex;flex-direction:column;gap:6px}
 .lvl{display:flex;align-items:center;gap:10px;border:2px solid #3a2a5e;background:var(--panel2);border-radius:12px;padding:8px 10px;text-align:left}
@@ -195,3 +195,45 @@ h2{font-size:12px;letter-spacing:.16em;color:var(--muted);margin:14px 0 6px;text
 .viewRow .big{flex:1}
 .big.del{background:#4a1d33;box-shadow:0 5px 0 #2a0f1d;color:#ffb3c6}
 .big.del.armed{background:#c7283a;color:#fff}
+
+/* Ride / place locks, goals */
+.rider.locked canvas,.place.locked canvas{filter:grayscale(.85) brightness(.55)}
+.rider.locked span{color:var(--muted)}
+.lockNote{min-height:0;margin:6px 0 0;color:#ffb3c6;font-weight:700}
+.lockNote:empty{display:none}
+.goalsBtn{flex:1;background:linear-gradient(#c9a8ff,#8a4dff);box-shadow:0 4px 0 #4f2596;color:#fff;display:flex;align-items:center;justify-content:center;gap:6px}
+.goalsBtn:active{box-shadow:0 1px 0 #4f2596}
+.goalsBtn .cnt{background:#2a1060;color:#e6dcff}
+.coinRow .albumBtn{flex:1;justify-content:center}
+.places{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.place{border:2px solid #3a2a5e;background:var(--panel2);border-radius:14px;padding:5px;display:flex;flex-direction:column;gap:3px;text-align:left;position:relative}
+.place canvas{width:100%;height:58px;border-radius:9px;display:block}
+.place .pname{font-weight:800;font-size:12px;line-height:1.15}
+.place .plock{font-size:10px;color:#ffb3c6;font-weight:700;line-height:1.2}
+.place .plock:empty{display:none}
+.place.sel{border-color:var(--teal);box-shadow:0 0 12px rgba(25,195,192,.3)}
+.goalList{display:flex;flex-direction:column;gap:8px}
+.tierHead{margin:10px 0 0;font-size:13px}
+.tier-easy{color:#8ff5ee}.tier-medium{color:#ffc94d}.tier-big{color:#ff8ad8}
+.goal{display:flex;gap:10px;align-items:center;background:var(--panel2);border:2px solid #3a2a5e;border-radius:14px;padding:8px}
+.goal.done{border-color:#2fb87a;background:#1b2d3a}
+.gchk{flex:0 0 26px;height:26px;border-radius:50%;border:2px solid #4a3775;display:flex;align-items:center;justify-content:center;font-weight:900;color:#062a26}
+.goal.done .gchk{background:var(--green);border-color:var(--green)}
+.gbody{flex:1;min-width:0}
+.gtext{font-weight:800;font-size:14px;line-height:1.2}
+.gbar{height:7px;background:#140b26;border-radius:4px;margin:6px 0 3px;overflow:hidden}
+.gbar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--gold));border-radius:4px}
+.goal.done .gbar i{background:var(--green)}
+.gprog{font-size:12px;color:var(--muted);font-weight:700}
+.grew{font-size:11px;color:#e6dcf7;margin-top:2px;line-height:1.3}
+.grew small{color:var(--muted)}
+.gthumbs{flex:0 0 auto;display:flex;flex-direction:column;gap:4px}
+.gthumbs canvas{width:54px;height:54px;border-radius:9px;display:block}
+.unlockMsg.show{display:block;animation:pulse 1.4s ease-in-out 2}
+.ulHead{font-size:20px;letter-spacing:.08em;color:var(--gold)}
+.ulRow{margin-top:6px;display:flex;flex-direction:column;gap:1px}
+.ulGoal{font-size:12px;color:#8ff5ee}
+.ulRew{font-size:15px;color:#fff}
+.ulRew small{color:var(--muted);font-weight:700}
+.ulFoot{margin-top:6px;font-size:11px;color:var(--muted);font-weight:700}
+.tabs button{font-size:12px;padding:9px 1px}

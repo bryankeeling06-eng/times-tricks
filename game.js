@@ -53,6 +53,20 @@
         { id: 's5050', name: '50-50 GRIND', grind: true, contact: 7, style: { boardRot: 0, bodyRot: -0.04 } }
       ],
       drawVehicle: drawScooter
+    },
+    {
+      id: 'bmx', name: 'BMX', gearCat: 'bmx', unlock: 'r_bmx',
+      hoodie: '#ff9a3d', hoodieDark: '#c8661c', deck: '#ffe04d',
+      stance: { feet: [[-9, -14], [5, -18]], hip: [-5, -47], shoulder: [5, -72], hands: [[11, -61], [14, -61]], elbow: [-1, 1] },
+      tricks: [
+        { id: 'hop', name: 'BUNNY HOP' }, { id: 'tabletop', name: 'TABLETOP' }, { id: 'barspin', name: 'BAR SPIN' },
+        { id: 'threesixty', name: '360' }, { id: 'tailwhip', name: 'TAILWHIP' }
+      ],
+      grinds: [
+        { id: 'bdpeg', name: 'DOUBLE-PEG GRIND', grind: true, contact: 14, style: { bodyRot: -0.04 } },
+        { id: 'bfeeble', name: 'FEEBLE GRIND', grind: true, contact: 14, style: { boardRot: -0.12, bodyRot: -0.08 } }
+      ],
+      drawVehicle: drawBMX
     }
   ];
   function riderById(id) { for (var i = 0; i < RIDERS.length; i++) if (RIDERS[i].id === id) return RIDERS[i]; return RIDERS[0]; }
@@ -70,7 +84,8 @@
     { id: 'shirt', name: 'Shirts' },
     { id: 'helmet', name: 'Helmets' },
     { id: 'board', name: 'Boards', rider: 'skate' },
-    { id: 'scooter', name: 'Scooters', rider: 'scooter' }
+    { id: 'scooter', name: 'Scooters', rider: 'scooter' },
+    { id: 'bmx', name: 'BMX', rider: 'bmx' }
   ];
   var GEAR = [
     // Shirts (color null = the ride's own hoodie color)
@@ -81,6 +96,8 @@
     { id: 'shirt_blue', cat: 'shirt', name: 'Ocean Blue', price: 80, color: '#2f7cf6', dark: '#1b4fb0' },
     { id: 'shirt_purple', cat: 'shirt', name: 'Royal Stripe', price: 100, color: '#8a4dff', dark: '#5a2bb8', stripe: '#ffc94d' },
     { id: 'shirt_neon', cat: 'shirt', name: 'Neon Glow', price: 150, color: '#39ffd8', dark: '#14b89a', glow: true },
+    { id: 'shirt_sky', cat: 'shirt', name: 'Sky Tee', price: 30, color: '#6cc6ff', dark: '#3a8fd0', unlock: 'e_streak5' },
+    { id: 'shirt_sunrise', cat: 'shirt', name: 'Sunrise Tee', price: 35, color: '#ff9a3d', dark: '#c8661c', unlock: 'e_grind1' },
     { id: 'shirt_gold', cat: 'shirt', name: 'Gold Jersey', price: 180, color: '#ffc94d', dark: '#c8931f', stripe: '#ffffff', unlock: 'streak20' },
     // Helmets (accent null = the ride's accent color)
     { id: 'helm_classic', cat: 'helmet', name: 'Classic Black', price: 0, color: '#16121f', pattern: 'stripe' },
@@ -91,6 +108,9 @@
     { id: 'helm_checker', cat: 'helmet', name: 'Checkered', price: 120, color: '#f2f2f7', pattern: 'checker', accent: '#16121f' },
     { id: 'helm_flames', cat: 'helmet', name: 'Hot Flames', price: 150, color: '#16121f', pattern: 'flames', accent: '#ff7a3d' },
     { id: 'helm_spikes', cat: 'helmet', name: 'Spike Crown', price: 160, color: '#23202e', pattern: 'spikes', accent: '#d5d9e6' },
+    { id: 'helm_mint', cat: 'helmet', name: 'Mint Racer', price: 30, color: '#7ff0c8', pattern: 'stripe', accent: '#16121f', unlock: 'e_rounds3' },
+    { id: 'helm_camo', cat: 'helmet', name: 'Camo', price: 170, color: '#5b6b3a', pattern: 'camo', accent: '#2f3a22', unlock: 'm_acc90' },
+    { id: 'helm_diamond', cat: 'helmet', name: 'Diamond', price: 300, color: '#bfefff', pattern: 'diamond', unlock: 'b_perfect5' },
     { id: 'helm_chrome', cat: 'helmet', name: 'Chrome Dome', price: 220, color: '#c9ceda', pattern: 'chrome', unlock: 'l3pb' },
     // Skateboards
     { id: 'board_classic', cat: 'board', name: 'Classic Orange', price: 0, deck: '#ff7a3d', wheel: '#f4e9d8' },
@@ -99,6 +119,8 @@
     { id: 'board_split', cat: 'board', name: 'Sunset Split', price: 90, deck: '#ff4f8b', accent: '#ffb35c', pattern: 'split', wheel: '#ffe04d' },
     { id: 'board_checker', cat: 'board', name: 'Checker Deck', price: 110, deck: '#f2f2f7', accent: '#16121f', pattern: 'checker', wheel: '#f2f2f7' },
     { id: 'board_flame', cat: 'board', name: 'Flame Deck', price: 150, deck: '#c7283a', accent: '#ffb35c', pattern: 'flames', wheel: '#ff9a3d' },
+    { id: 'board_flamewheels', cat: 'board', name: 'Flame Wheels', price: 170, deck: '#16121f', accent: '#ff7a3d', pattern: 'flames', wheel: '#ff7a3d', wheelGlow: true, unlock: 'm_alllevels' },
+    { id: 'board_holo', cat: 'board', name: 'Holo Deck', price: 300, deck: '#ff4f8b', pattern: 'holo', wheel: '#ffffff', wheelGlow: true, unlock: 'b_streak30' },
     { id: 'board_galaxy', cat: 'board', name: 'Galaxy Deck', price: 240, deck: '#3b1f7a', accent: '#ffffff', pattern: 'stars', wheel: '#8ff5ee', wheelGlow: true, unlock: 'grinds10' },
     // Scooters
     { id: 'scoot_classic', cat: 'scooter', name: 'Classic Teal', price: 0, deck: '#19c3c0', bar: '#d9dbe8', wheel: '#16121f' },
@@ -108,22 +130,63 @@
     { id: 'scoot_purple', cat: 'scooter', name: 'Purple Haze', price: 100, deck: '#8a4dff', bar: '#ffc94d', wheel: '#16121f', pattern: 'stripe', accent: '#ffc94d' },
     { id: 'scoot_checker', cat: 'scooter', name: 'Checker', price: 130, deck: '#f2f2f7', accent: '#16121f', pattern: 'checker', bar: '#16121f', wheel: '#f2f2f7' },
     { id: 'scoot_spark', cat: 'scooter', name: 'Rail Spark', price: 200, deck: '#ff7a3d', accent: '#ffe04d', pattern: 'flames', bar: '#ff7a3d', wheel: '#9dff3c', wheelGlow: true, unlock: 'grinds10' },
-    { id: 'scoot_gold', cat: 'scooter', name: 'Gold Rush', price: 250, deck: '#23202e', accent: '#ffc94d', pattern: 'stripe', bar: '#ffc94d', wheel: '#ffc94d', unlock: 'l5acc80' }
+    { id: 'scoot_neonbar', cat: 'scooter', name: 'Neon Bars', price: 180, deck: '#23202e', bar: '#39ffd8', barGlow: true, wheel: '#39ffd8', wheelGlow: true, unlock: 'm_grinds25' },
+    { id: 'scoot_royal', cat: 'scooter', name: 'Royal Gold', price: 300, deck: '#ffc94d', accent: '#ffffff', pattern: 'stars', bar: '#ffc94d', barGlow: true, wheel: '#ffc94d', wheelGlow: true, unlock: 'b_perfect5' },
+    { id: 'scoot_gold', cat: 'scooter', name: 'Gold Rush', price: 250, deck: '#23202e', accent: '#ffc94d', pattern: 'stripe', bar: '#ffc94d', wheel: '#ffc94d', unlock: 'l5acc80' },
+    // BMX (frame, tire, optional bar / pattern)
+    { id: 'bmx_classic', cat: 'bmx', name: 'Classic Yellow', price: 0, frame: '#ffe04d', tire: '#16121f' },
+    { id: 'bmx_black', cat: 'bmx', name: 'Blackout', price: 40, frame: '#23202e', tire: '#e8394a', bar: '#e8394a' },
+    { id: 'bmx_red', cat: 'bmx', name: 'Race Red', price: 60, frame: '#e8394a', tire: '#f2f2f7' },
+    { id: 'bmx_teal', cat: 'bmx', name: 'Teal Tires', price: 70, frame: '#f2f2f7', tire: '#19c3c0', bar: '#19c3c0' },
+    { id: 'bmx_purple', cat: 'bmx', name: 'Purple Stripe', price: 100, frame: '#8a4dff', tire: '#16121f', pattern: 'stripe', accent: '#ffc94d', bar: '#ffc94d' },
+    { id: 'bmx_neon', cat: 'bmx', name: 'Neon Tires', price: 130, frame: '#23202e', tire: '#9dff3c', wheelGlow: true, bar: '#9dff3c' },
+    { id: 'bmx_holo', cat: 'bmx', name: 'Holo Frame', price: 300, frame: '#ff4f8b', pattern: 'holo', tire: '#ffffff', wheelGlow: true, bar: '#ffffff', unlock: 'b_streak30' }
   ];
   var GEAR_BY_ID = {}; GEAR.forEach(function (g) { GEAR_BY_ID[g.id] = g; });
   function catDefault(cat) { for (var i = 0; i < GEAR.length; i++) if (GEAR[i].cat === cat && GEAR[i].price === 0) return GEAR[i]; }
 
-  // Milestones that unlock premium items. progress(stats) -> [current, goal].
+  // ======================================================================
+  // GOALS ladder (Easy / Medium / Big). Each goal: id, tier, text, label, progress(stats) -> [current, goal].
+  // Rewards are data-driven: any GEAR item, PLACE or RIDER with unlock: '<goal id>' is its reward.
+  // ======================================================================
   var L3_PB_GOAL = 6000;
-  var ACHIEVEMENTS = {
-    streak20: { text: 'Hit a 20-answer streak', progress: function (s) { return [Math.min(s.bestStreak, 20), 20]; } },
-    grinds10: { text: 'Land 10 grinds (finished rounds)', progress: function (s) { return [Math.min(s.grinds, 10), 10]; } },
-    l5acc80: { text: 'Finish a Level 5 round with 80%+ accuracy (8+ answers)', progress: function (s) { return [s.l5acc80 ? 80 : Math.min(s.l5bestAcc, 79), 80]; }, unit: '%' },
-    l3pb: { text: 'Score ' + L3_PB_GOAL.toLocaleString('en-US') + '+ on Level 3', progress: function () { return [Math.min(store.get('best_3', 0), L3_PB_GOAL), L3_PB_GOAL]; } }
-  };
-  function getStats() { var s = store.get('stats', {}); return { bestStreak: s.bestStreak || 0, grinds: s.grinds || 0, l5acc80: !!s.l5acc80, l5bestAcc: s.l5bestAcc || 0, rounds: s.rounds || 0 }; }
+  var GOAL_TIERS = [{ id: 'easy', name: 'Easy' }, { id: 'medium', name: 'Medium' }, { id: 'big', name: 'Big' }];
+  function upTo(v, n) { return [Math.min(v, n), n]; }
+  var GOALS = [
+    { id: 'e_streak5', tier: 'easy', text: 'Hit your first 5-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 5); } },
+    { id: 'e_rounds3', tier: 'easy', text: 'Play 3 rounds', label: 'Rounds', progress: function (s) { return upTo(s.rounds, 3); } },
+    { id: 'e_grind1', tier: 'easy', text: 'Land your first grind', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 1); } },
+    { id: 'grinds10', tier: 'easy', text: 'Land 10 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 10); } },
+    { id: 'p_beach', tier: 'easy', text: 'Play 10 rounds', label: 'Rounds', progress: function (s) { return upTo(s.rounds, 10); } },
+    { id: 'm_acc90', tier: 'medium', text: 'Get 90%+ accuracy on any level (8+ answers)', label: 'Best accuracy', unit: '%', progress: function (s) { return upTo(s.bestAcc, 90); } },
+    { id: 'm_alllevels', tier: 'medium', text: 'Finish a round on every level (1–5)', label: 'Levels finished', progress: function (s) { return upTo(s.levelsDone.length, 5); } },
+    { id: 'r_bmx', tier: 'medium', text: 'Hit a 15-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 15); } },
+    { id: 'm_grinds25', tier: 'medium', text: 'Land 25 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 25); } },
+    { id: 'streak20', tier: 'medium', text: 'Hit a 20-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 20); } },
+    { id: 'l5acc80', tier: 'medium', text: 'Finish a Level 5 round with 80%+ accuracy (8+ answers)', label: 'Level 5 best accuracy', unit: '%', progress: function (s) { return [s.l5acc80 ? 80 : Math.min(s.l5bestAcc, 79), 80]; } },
+    { id: 'l3pb', tier: 'medium', text: 'Score ' + L3_PB_GOAL.toLocaleString('en-US') + '+ on Level 3', label: 'Level 3 best', progress: function (s) { return upTo(s.best3, L3_PB_GOAL); } },
+    { id: 'b_streak30', tier: 'big', text: 'Hit a 30-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 30); } },
+    { id: 'b_perfect5', tier: 'big', text: 'Perfect round on Level 5 (100%, 8+ answers)', label: 'Perfect Level 5 rounds', progress: function (s) { return upTo(s.l5perfect ? 1 : 0, 1); } },
+    { id: 'p_night', tier: 'big', text: 'Land 50 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 50); } }
+  ];
+  var ACHIEVEMENTS = {}; GOALS.forEach(function (g) { ACHIEVEMENTS[g.id] = g; });
+  function getStats() {
+    var s = store.get('stats', {}) || {}, done = Array.isArray(s.levelsDone) ? s.levelsDone.slice() : [];
+    for (var L = 1; L <= 5; L++) if (store.get('best_' + L, 0) > 0 && done.indexOf(L) < 0) done.push(L);   // migrate older saves
+    return { bestStreak: s.bestStreak || 0, grinds: s.grinds || 0, l5acc80: !!s.l5acc80, l5bestAcc: s.l5bestAcc || 0, rounds: s.rounds || 0,
+      levelsDone: done, bestAcc: s.bestAcc || 0, l5perfect: !!s.l5perfect, best3: store.get('best_3', 0) };
+  }
+  function rewardsFor(id) {
+    var out = [];
+    GEAR.forEach(function (it) { if (it.unlock === id) out.push({ type: 'gear', name: it.name, kind: GEAR_CATS.filter(function (c) { return c.id === it.cat; })[0].name.replace(/s$/, ''), item: it }); });
+    PLACES.forEach(function (p) { if (p.unlock === id) out.push({ type: 'place', name: p.name, kind: 'Place', place: p }); });
+    RIDERS.forEach(function (r) { if (r.unlock === id) out.push({ type: 'ride', name: r.name, kind: 'New ride', rider: r }); });
+    return out;
+  }
   function achieved(id, stats) { var p = ACHIEVEMENTS[id].progress(stats || getStats()); return p[0] >= p[1]; }
   function isUnlocked(item, stats) { return !item.unlock || achieved(item.unlock, stats); }
+  function rideUnlocked(r, stats) { return !r.unlock || achieved(r.unlock, stats); }
+  function placeUnlocked(p, stats) { return !p.unlock || achieved(p.unlock, stats); }
 
   // Coins
   var COINS = { perCorrect: 2, perMultStep: 1, grind: 3, accuracyBonus: 5, accuracyMin: 80, accuracyMinAnswers: 8, bestBonus: 10 };
@@ -149,7 +212,8 @@
       shirt: s.color || r.hoodie, shirtDark: s.dark || r.hoodieDark, stripe: s.stripe || null, glow: s.glow ? (s.color || r.hoodie) : null,
       helmet: h.color, helmetPattern: h.pattern || 'none', helmetAccent: h.accent || r.deck,
       deck: v.deck || r.deck, deckPattern: v.pattern || 'none', deckAccent: v.accent || '#ffffff',
-      wheel: v.wheel || '#f4e9d8', wheelGlow: !!v.wheelGlow, bar: v.bar || '#d9dbe8'
+      wheel: v.wheel || '#f4e9d8', wheelGlow: !!v.wheelGlow, bar: v.bar || '#d9dbe8', barGlow: !!v.barGlow,
+      frame: v.frame || r.deck, tire: v.tire || '#16121f', framePattern: v.pattern || 'none', frameAccent: v.accent || '#ffffff'
     };
   }
   function dress(r, eq) { var o = Object.create(r); o.look = lookFor(r, eq); return o; }
@@ -231,7 +295,8 @@
     rider: store.get('rider', 'skate'),
     level: clamp(store.get('level', 1), 1, LEVELS.length),
     mode: store.get('mode', 'pad') === 'choices' ? 'choices' : 'pad',
-    muted: !!store.get('muted', false)
+    muted: !!store.get('muted', false),
+    place: store.get('place', 'street')
   };
   var G = {
     screen: 'menu', phase: 'idle', phaseT: 0, paused: false,
@@ -243,7 +308,9 @@
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
   window.__tt.snap = function (streak) { return takeSnapshot(streak || 5, G.trick); };
-  window.__tt.album = function () { return getAlbum().map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, kb: Math.round(e.img.length * 0.75 / 1024) }; }); };
+  window.__tt.album = function () { return getAlbum().map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, place: e.place || "street", kb: Math.round(e.img.length * 0.75 / 1024) }; }); };
+  window.__tt.goals = function () { var st = getStats(); return GOALS.map(function (g) { return { id: g.id, tier: g.tier, done: achieved(g.id, st), p: g.progress(st), rewards: rewardsFor(g.id).map(function (r) { return r.name; }) }; }); };
+  window.__tt.PLACES = PLACES;
   window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
 
   function level() { return LEVELS[settings.level - 1]; }
@@ -328,14 +395,15 @@
       }
     }
   }
-  function drawProps() {
+  function drawProps(silhouette) {
+    var sil = silhouette || '#1c0f2e';
     var par = 0.6, off = ((G.worldX * par) % TILE + TILE) % TILE, base = GROUND_Y - 4;
     ctx.save();
     for (var rep = 0; rep < Math.ceil(VW / TILE) + 1; rep++) {
       var ox = rep * TILE - off;
       for (var i = 0; i < props.length; i++) {
         var p = props[i], x = ox + p.x; if (x < -120 || x > VW + 120) continue;
-        ctx.fillStyle = '#1c0f2e'; ctx.strokeStyle = '#1c0f2e';
+        ctx.fillStyle = sil; ctx.strokeStyle = sil;
         if (p.type === 'palm' || p.type === 'palm2') {
           var h = 120 * p.s, lean = p.type === 'palm' ? 14 : -10;
           ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, base); ctx.quadraticCurveTo(x + lean * 0.2, base - h * 0.5, x + lean, base - h); ctx.stroke();
@@ -377,15 +445,181 @@
     // warm sun reflection
     ctx.fillStyle = 'rgba(255,170,100,0.10)'; ctx.fillRect(0, GROUND_Y, VW, 12);
   }
-  function drawLamps() {
+  function drawLamps(pole, g0, g1) {
     var gap = 300, off = ((G.worldX * 0.85) % gap + gap) % gap;
     for (var x = -off + 40; x < VW + gap; x += gap) {
-      ctx.strokeStyle = '#140a22'; ctx.lineWidth = 4;
+      ctx.strokeStyle = pole || '#140a22'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.moveTo(x, GROUND_Y - 4); ctx.lineTo(x, GROUND_Y - 150); ctx.quadraticCurveTo(x, GROUND_Y - 162, x + 16, GROUND_Y - 162); ctx.stroke();
       var gl = ctx.createRadialGradient(x + 18, GROUND_Y - 156, 1, x + 18, GROUND_Y - 156, 30);
-      gl.addColorStop(0, 'rgba(255,230,160,0.9)'); gl.addColorStop(1, 'rgba(255,200,120,0)');
+      gl.addColorStop(0, g0 || 'rgba(255,230,160,0.9)'); gl.addColorStop(1, g1 || 'rgba(255,200,120,0)');
       ctx.fillStyle = gl; ctx.fillRect(x - 14, GROUND_Y - 188, 64, 64);
     }
+  }
+
+  // ---------- places (background / props / palette only; gameplay is identical) ----------
+  // To add a place: write a draw function (logical coords: ground at GROUND_Y, scroll with G.worldX)
+  // and add { id, name, draw, unlock? } to PLACES. unlock = a GOALS id.
+  var PLACES = [
+    { id: 'street', name: 'Sunset Street', draw: drawStreet, swatch: ['#5b2166', '#ff8a4c'] },
+    { id: 'beach', name: 'Beach Boardwalk', draw: drawBeach, unlock: 'p_beach', swatch: ['#3aa8f0', '#f1d49b'] },
+    { id: 'night', name: 'Neon Night City', draw: drawNight, unlock: 'p_night', swatch: ['#05030f', '#ff4fd8'], railGlow: '#39ffd8' }
+  ];
+  var PLACE_BY_ID = {}; PLACES.forEach(function (p) { PLACE_BY_ID[p.id] = p; });
+  var curPlace = PLACES[0];
+  function drawBackdrop(t, placeId) {
+    curPlace = PLACE_BY_ID[placeId || settings.place] || PLACES[0];
+    curPlace.draw(t);
+  }
+  function drawStreet(t) {
+    drawSky(t);
+    drawCity(farCity, 0.08, GROUND_Y - 10, '#3d1d52', 'rgba(255,190,120,0.35)', 0);
+    drawCity(nearCity, 0.25, GROUND_Y - 4, '#26143a', 'rgba(255,210,130,0.55)', 300);
+    drawProps(); drawLamps(); drawGround();
+  }
+  // paint a place into any canvas context (menu thumbnails, goal rewards); bottom = lowest logical y shown
+  function paintBackdrop(x, pxW, pxH, placeId, lvw, bottom, worldX) {
+    var saved = { ctx: ctx, VW: VW, TOP: TOP, wx: G.worldX, cp: curPlace };
+    var k = pxW / lvw, lvh = pxH / k;
+    try {
+      ctx = x; VW = lvw; TOP = (bottom || 400) - lvh; G.worldX = worldX || 600;
+      x.setTransform(k * (x.__dpr || 1), 0, 0, k * (x.__dpr || 1), 0, -TOP * k * (x.__dpr || 1));
+      drawBackdrop(3, placeId);
+    } finally { ctx = saved.ctx; VW = saved.VW; TOP = saved.TOP; G.worldX = saved.wx; curPlace = saved.cp; }
+  }
+
+  // Beach Boardwalk: daytime sky, ocean, pier, lifeguard towers, umbrellas, wooden boardwalk
+  var beachProps = []; (function () { var x = 40, types = ['tower', 'palm', 'umbrella', 'surf', 'palm', 'umbrella']; var i = 0; while (x < TILE) { beachProps.push({ x: x, type: types[i % types.length], s: 0.85 + ((i * 37) % 10) / 30, c: ['#ff4f8b', '#19c3c0', '#ffc94d'][i % 3] }); x += 150 + ((i * 53) % 90); i++; } })();
+  function drawBeach(t) {
+    var hz = GROUND_Y - 96;
+    var g = ctx.createLinearGradient(0, Math.min(0, TOP), 0, hz); g.addColorStop(0, '#2f9be8'); g.addColorStop(0.65, '#8fd3ff'); g.addColorStop(1, '#e4f6ff');
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, VW, hz - TOP + 1);
+    var sx = VW * 0.8, sy = Math.max(TOP + 44, 56);
+    var gl = ctx.createRadialGradient(sx, sy, 8, sx, sy, 70); gl.addColorStop(0, 'rgba(255,255,220,0.9)'); gl.addColorStop(1, 'rgba(255,255,220,0)');
+    ctx.fillStyle = gl; ctx.fillRect(sx - 70, sy - 70, 140, 140);
+    ctx.fillStyle = '#fffbe0'; ctx.beginPath(); ctx.arc(sx, sy, 20, 0, Math.PI * 2); ctx.fill();
+    // clouds
+    var span = VW + 240, coff = (G.worldX * 0.03 + t * 4) % span;
+    for (var i = 0; i < 4; i++) {
+      var cx = ((i * 170 - coff) % span + span) % span - 120, cy = sy + 10 + (i % 2) * 34 - 30;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.arc(cx + 14, cy - 6, 15, 0, Math.PI * 2); ctx.arc(cx + 30, cy, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(cx, cy, 30, 11);
+    }
+    // headland + ocean
+    ctx.fillStyle = '#3f8fa8'; ctx.beginPath(); ctx.moveTo(-10, hz); ctx.quadraticCurveTo(VW * 0.18, hz - 20, VW * 0.42, hz); ctx.fill();
+    var og = ctx.createLinearGradient(0, hz, 0, GROUND_Y - 22); og.addColorStop(0, '#1670bd'); og.addColorStop(1, '#38b9e6');
+    ctx.fillStyle = og; ctx.fillRect(0, hz, VW, GROUND_Y - 22 - hz);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (var j = 0; j < 5; j++) {
+      var yy = hz + 7 + j * 13, wo = ((G.worldX * (0.05 + j * 0.03) + t * 9 * (j % 2 ? 1 : -1)) % 46 + 46) % 46;
+      for (var wx = -46; wx < VW + 46; wx += 46) ctx.fillRect(wx - wo + (j * 17) % 46, yy, 12 + j * 2, 1.4);
+    }
+    // pier
+    var P = 900, po = ((G.worldX * 0.12) % P + P) % P;
+    for (var rep = -1; rep < Math.ceil(VW / P) + 1; rep++) {
+      var px = rep * P - po + 140;
+      if (px > VW || px + 320 < 0) continue;
+      ctx.fillStyle = '#5a4028'; for (var k = 0; k <= 300; k += 20) ctx.fillRect(px + k, hz + 14, 3, 24);
+      ctx.fillStyle = '#7a5a3c'; ctx.fillRect(px, hz + 10, 304, 5); ctx.fillRect(px, hz + 3, 304, 1.5);
+      for (var k2 = 0; k2 <= 300; k2 += 25) ctx.fillRect(px + k2, hz + 3, 1.5, 7);
+      ctx.fillStyle = '#e8453c'; ctx.fillRect(px + 262, hz - 8, 30, 18); ctx.fillStyle = '#f2f2f7'; ctx.fillRect(px + 262, hz - 2, 30, 4);
+      ctx.fillStyle = '#c23228'; ctx.beginPath(); ctx.moveTo(px + 258, hz - 8); ctx.lineTo(px + 277, hz - 18); ctx.lineTo(px + 296, hz - 8); ctx.fill();
+    }
+    // sand strip with foam
+    ctx.fillStyle = '#f1d49b'; ctx.fillRect(0, GROUND_Y - 24, VW, 22);
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(0, GROUND_Y - 25, VW, 2);
+    drawBeachProps();
+    // boardwalk planks + sand below
+    ctx.fillStyle = '#b9875a'; ctx.fillRect(0, GROUND_Y - 4, VW, 44);
+    ctx.fillStyle = '#e3b682'; ctx.fillRect(0, GROUND_Y - 4, VW, 2);
+    ctx.fillStyle = '#8a6038'; var so = G.worldX % 22; for (var x = -so; x < VW + 22; x += 22) ctx.fillRect(x, GROUND_Y - 2, 1.5, 42);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0, GROUND_Y + 40, VW, 4);
+    ctx.fillStyle = '#e9c98f'; ctx.fillRect(0, GROUND_Y + 44, VW, VH - GROUND_Y - 44);
+    ctx.fillStyle = 'rgba(160,120,60,0.35)'; var sdo = G.worldX % 60;
+    for (var d = 0; d < 14; d++) { var dx = ((d * 53) % 60) + Math.floor(d / 2) * 60 - sdo; ctx.fillRect(dx, GROUND_Y + 50 + (d * 7) % 26, 2, 2); }
+  }
+  function drawBeachProps() {
+    var off = ((G.worldX * 0.6) % TILE + TILE) % TILE, base = GROUND_Y - 8;
+    for (var rep = 0; rep < Math.ceil(VW / TILE) + 1; rep++) {
+      var ox = rep * TILE - off;
+      for (var i = 0; i < beachProps.length; i++) {
+        var p = beachProps[i], x = ox + p.x, s = p.s; if (x < -80 || x > VW + 80) continue;
+        if (p.type === 'tower') {
+          ctx.strokeStyle = '#efe7d2'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, base); ctx.lineTo(x + 8, base - 40); ctx.moveTo(x + 36, base); ctx.lineTo(x + 28, base - 40); ctx.moveTo(x + 4, base - 20); ctx.lineTo(x + 32, base - 20); ctx.stroke();
+          ctx.fillStyle = '#d9d2bd'; ctx.fillRect(x + 1, base - 43, 34, 4);
+          ctx.fillStyle = '#e8453c'; ctx.fillRect(x + 6, base - 66, 24, 23); ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 6, base - 58, 24, 5);
+          ctx.fillStyle = '#1b3f66'; ctx.fillRect(x + 11, base - 64, 14, 5);
+          ctx.fillStyle = '#c23228'; ctx.beginPath(); ctx.moveTo(x + 1, base - 66); ctx.lineTo(x + 18, base - 78); ctx.lineTo(x + 35, base - 66); ctx.fill();
+          ctx.fillStyle = '#9aa0b5'; ctx.fillRect(x + 17, base - 96, 1.5, 18); ctx.fillStyle = '#ffc94d'; ctx.fillRect(x + 18.5, base - 96, 10, 6);
+        } else if (p.type === 'palm') {
+          var h = 110 * s; ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, base); ctx.quadraticCurveTo(x + 4, base - h * 0.5, x + 12, base - h); ctx.stroke();
+          ctx.strokeStyle = '#2f9e4f'; ctx.lineWidth = 4;
+          for (var f = 0; f < 7; f++) { var a = -Math.PI / 2 + (f - 3) * 0.5, len = 32 * s, tx = x + 12, ty = base - h; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo(tx + Math.cos(a) * len * 0.7, ty + Math.sin(a) * len * 0.7 - 8, tx + Math.cos(a) * len, ty + Math.sin(a) * len + 12); ctx.stroke(); }
+          ctx.fillStyle = '#6b3f1c'; ctx.beginPath(); ctx.arc(x + 12, base - h + 3, 3, 0, Math.PI * 2); ctx.fill();
+        } else if (p.type === 'umbrella') {
+          ctx.fillStyle = '#e9e4d8'; ctx.fillRect(x - 1, base - 44, 2, 44);
+          ctx.save(); ctx.beginPath(); ctx.moveTo(x - 26, base - 38); ctx.quadraticCurveTo(x, base - 64, x + 26, base - 38); ctx.closePath(); ctx.clip();
+          for (var st = -26; st < 26; st += 8.7) { ctx.fillStyle = ((st + 26) / 8.7 | 0) % 2 ? '#ffffff' : p.c; ctx.fillRect(x + st, base - 66, 8.7, 30); }
+          ctx.restore();
+          ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(x + 6, base + 1, 22, 3, 0, 0, Math.PI * 2); ctx.fill();
+        } else if (p.type === 'surf') {
+          ctx.save(); ctx.translate(x, base - 26); ctx.rotate(0.12);
+          ctx.fillStyle = p.c; ctx.beginPath(); ctx.ellipse(0, 0, 6, 28, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -26, 2, 52); ctx.restore();
+          ctx.save(); ctx.translate(x + 14, base - 22); ctx.rotate(-0.1);
+          ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.ellipse(0, 0, 5, 23, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
+      }
+    }
+  }
+
+  // Neon Night City: dark sky, moon, neon signs, glowing lamps and reflections (rails glow cyan)
+  var NEON = ['#ff4fd8', '#39ffd8', '#ffe04d', '#7c8cff'], NEON_TXT = ['ARCADE', 'PIZZA', 'SKATE', '24/7', 'TACOS', 'MATH', 'RADIO', 'DINER'];
+  function drawNight(t) {
+    var g = ctx.createLinearGradient(0, Math.min(0, TOP), 0, GROUND_Y); g.addColorStop(0, '#04020c'); g.addColorStop(0.6, '#130833'); g.addColorStop(1, '#34115a');
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, VW, GROUND_Y - TOP);
+    for (var s = 0; s < 46; s++) {
+      var x = (s * 83.7) % VW, y = TOP + ((s * 47.3) % Math.max(60, (GROUND_Y - 150 - TOP)));
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.5 * Math.abs(Math.sin(t * 1.7 + s))) + ')'; ctx.fillRect(x, y, s % 5 ? 1.2 : 2, s % 5 ? 1.2 : 2);
+    }
+    var mx = VW * 0.22, my = Math.max(TOP + 40, 48);
+    var mg = ctx.createRadialGradient(mx, my, 6, mx, my, 50); mg.addColorStop(0, 'rgba(255,240,210,0.45)'); mg.addColorStop(1, 'rgba(255,240,210,0)');
+    ctx.fillStyle = mg; ctx.fillRect(mx - 50, my - 50, 100, 100);
+    ctx.fillStyle = '#fff4d6'; ctx.beginPath(); ctx.arc(mx, my, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0c0624'; ctx.beginPath(); ctx.arc(mx + 7, my - 4, 13, 0, Math.PI * 2); ctx.fill();
+    drawCity(farCity, 0.08, GROUND_Y - 10, '#170c38', 'rgba(120,240,255,0.35)', 0);
+    drawCity(nearCity, 0.25, GROUND_Y - 4, '#1d1040', 'rgba(255,150,230,0.6)', 300);
+    drawNeonSigns(t);
+    drawProps('#0b0620');
+    drawLamps('#070414', 'rgba(140,250,255,0.95)', 'rgba(60,200,255,0)');
+    // ground: dark asphalt with neon reflections
+    ctx.fillStyle = '#ff4fd8'; ctx.fillRect(0, GROUND_Y - 4, VW, 1.5);
+    ctx.fillStyle = '#1a1236'; ctx.fillRect(0, GROUND_Y - 2.5, VW, 2.5);
+    var gg = ctx.createLinearGradient(0, GROUND_Y, 0, VH); gg.addColorStop(0, '#1f1542'); gg.addColorStop(1, '#0a0716');
+    ctx.fillStyle = gg; ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+    for (var r = 0; r < 7; r++) {
+      var rx = ((r * 97 - G.worldX * 0.25) % (VW + 60) + VW + 60) % (VW + 60) - 30, col = NEON[r % 4];
+      var rg = ctx.createLinearGradient(0, GROUND_Y, 0, GROUND_Y + 60); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.18; ctx.fillStyle = rg; ctx.fillRect(rx, GROUND_Y, 10, 60); ctx.globalAlpha = 1;
+    }
+    ctx.save(); ctx.shadowColor = '#39ffd8'; ctx.shadowBlur = 6; ctx.fillStyle = 'rgba(57,255,216,0.75)';
+    var off2 = G.worldX % 70; for (var x2 = -off2; x2 < VW + 70; x2 += 70) ctx.fillRect(x2, GROUND_Y + 52, 34, 3);
+    ctx.restore();
+  }
+  function drawNeonSigns(t) {
+    var off = ((G.worldX * 0.25 + 300) % TILE + TILE) % TILE, base = GROUND_Y - 4;
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 8px ' + fontFam; ctx.lineWidth = 1.6;
+    for (var rep = 0; rep < Math.ceil(VW / TILE) + 1; rep++) {
+      var ox = rep * TILE - off;
+      for (var i = 0; i < nearCity.length; i++) {
+        var b = nearCity[i], x = ox + b.x; if (i % 3 !== 1 || b.h < 60 || x > VW || x + b.w < 0) continue;
+        var col = NEON[i % 4], w = Math.min(b.w - 8, 46), sy = base - b.h + 12, on = Math.sin(t * 6 + i * 2.3) > -0.93;
+        ctx.globalAlpha = on ? 1 : 0.35; ctx.shadowColor = col; ctx.shadowBlur = 10; ctx.strokeStyle = col; ctx.fillStyle = col;
+        roundRect(x + 4, sy, w, 14, 4); ctx.stroke();
+        ctx.fillText(NEON_TXT[i % NEON_TXT.length], x + 4 + w / 2, sy + 7.5);
+      }
+    }
+    ctx.restore();
   }
 
   // ---------- gate ----------
@@ -496,7 +730,8 @@
     c.beginPath(); c.arc(cx, cy, R, Math.PI * 1.02, Math.PI * 2.02); c.closePath();
     if (pat === 'chrome') { var g = c.createLinearGradient(cx - R, cy - R, cx + R, cy); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#c9ceda'); g.addColorStop(0.7, '#6f7390'); g.addColorStop(1, '#e9ecf5'); c.fillStyle = g; }
     else c.fillStyle = L.helmet;
-    c.fill(); c.clip();
+    if (pat === 'diamond') { c.shadowColor = '#bfefff'; c.shadowBlur = 9; }
+    c.fill(); c.shadowBlur = 0; c.clip();
     c.fillStyle = ac;
     if (pat === 'stripe') c.fillRect(cx - 3, cy - R - 0.5, 3, R);
     else if (pat === 'double') { c.fillRect(cx - 5, cy - R, 2, R); c.fillRect(cx - 1, cy - R, 2, R); }
@@ -510,6 +745,12 @@
         c.lineTo(cx - R, cy); c.closePath(); c.fill();
       });
     }
+    else if (pat === 'camo') { [[-5, -6, 4, 2.6, 0], [2, -8, 3.6, 2, 1], [5, -3, 3.2, 2.2, 0], [-1, -2, 3.2, 1.8, 1], [-8, -2, 2.6, 2, 1], [7, -8, 2.4, 1.6, 0]].forEach(function (b) { c.fillStyle = b[4] ? '#a3b06a' : ac; c.beginPath(); c.ellipse(cx + b[0], cy + b[1], b[2], b[3], 0.4, 0, Math.PI * 2); c.fill(); }); }
+    else if (pat === 'diamond') {
+      var fac = [['#e9fcff', [[cx - 10, cy], [cx - 4, cy - 9], [cx - 3, cy]]], ['#8fdcf5', [[cx - 3, cy], [cx - 4, cy - 9], [cx + 3, cy - 9], [cx + 3, cy]]], ['#d2f6ff', [[cx + 3, cy], [cx + 3, cy - 9], [cx + 10, cy]]], ['#ffffff', [[cx - 4, cy - 9], [cx + 3, cy - 9], [cx, cy - 11]]]];
+      fac.forEach(function (f) { c.fillStyle = f[0]; c.beginPath(); f[1].forEach(function (pt, i) { if (i) c.lineTo(pt[0], pt[1]); else c.moveTo(pt[0], pt[1]); }); c.closePath(); c.fill(); });
+      c.fillStyle = '#ffffff'; starPath(c, cx + 5, cy - 6, 2.4); c.fill();
+    }
     else if (pat === 'chrome') { c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1.6; c.beginPath(); c.arc(cx - 1, cy - 1, 6.5, Math.PI * 1.15, Math.PI * 1.55); c.stroke(); }
     c.restore();
     if (pat === 'spikes') drawSpikes(c, cx, cy, R, ac);
@@ -522,6 +763,52 @@
     else if (pat === 'flames') { for (var fx = x0 + 3; fx < x1 - 8; fx += 10) { c.beginPath(); c.moveTo(fx, yTop + h); c.lineTo(fx + 9, yTop + h); c.lineTo(fx + 1, yTop + 0.5); c.closePath(); c.fill(); } }
     else if (pat === 'stars') { [[0.12, 0.3], [0.3, 0.7], [0.47, 0.25], [0.63, 0.65], [0.82, 0.35], [0.93, 0.7]].forEach(function (p) { c.fillRect(x0 + (x1 - x0) * p[0], yTop + h * p[1] - 0.6, 1.3, 1.3); }); }
   }
+  function rainbowGrad(c, x0, x1) {
+    var g = c.createLinearGradient(x0, 0, x1, 0);
+    ['#ff4f8b', '#ffb35c', '#ffe04d', '#3ee08f', '#39c6ff', '#8a4dff'].forEach(function (col, i) { g.addColorStop(i / 5, col); });
+    return g;
+  }
+  function bmxWheel(c, p, R, L) {
+    c.save();
+    if (L.wheelGlow) { c.shadowColor = L.tire; c.shadowBlur = 8; }
+    c.strokeStyle = L.tire; c.lineWidth = 3.2; c.beginPath(); c.arc(p[0], p[1], R - 1.6, 0, Math.PI * 2); c.stroke();
+    c.restore();
+    c.strokeStyle = '#c9ceda'; c.lineWidth = 1; c.beginPath(); c.arc(p[0], p[1], R - 3.6, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = 'rgba(220,224,236,0.6)'; c.lineWidth = 0.6; c.beginPath();
+    for (var i = 0; i < 8; i++) { var a = i * Math.PI / 4; c.moveTo(p[0], p[1]); c.lineTo(p[0] + Math.cos(a) * (R - 3.8), p[1] + Math.sin(a) * (R - 3.8)); }
+    c.stroke();
+    c.fillStyle = '#9aa0b5'; c.beginPath(); c.arc(p[0], p[1], 2.2, 0, Math.PI * 2); c.fill();
+  }
+  // BMX: wheels r=14 touching the ground; pegs at the hubs (used for peg grinds)
+  function drawBMX(c, pose, r) {
+    var L = r.look || lookFor(r);
+    var R = 14, RW = [-21, -14], FW = [21, -14], BB = [-2, -16], ST = [-8, -40], HT = [14, -43], HB = [16, -35];
+    c.save(); c.rotate(pose.boardRot || 0);
+    if (pose.flipY != null) { c.translate(0, -14); c.scale(1, pose.flipY); c.translate(0, 14); }
+    var fs = L.framePattern === 'holo' ? rainbowGrad(c, -30, 22) : L.frame;
+    // rear half (spins around the head tube for tailwhips)
+    c.save(); c.translate(15, 0); c.scale(pose.spinX == null ? 1 : pose.spinX, 1); c.translate(-15, 0);
+    bmxWheel(c, RW, R, L);
+    c.fillStyle = '#c9ceda'; c.fillRect(RW[0] - 4, RW[1] - 1.5, 8, 3);                 // rear peg
+    seg(c, [RW, BB], 3, fs); seg(c, [RW, ST], 3, fs);
+    seg(c, [BB, ST], 3.4, fs); seg(c, [ST, HT], 3.4, fs); seg(c, [BB, HB], 3.8, fs);
+    if (L.framePattern === 'stripe') { seg(c, [[BB[0] + 3, BB[1] - 2.6], [HB[0] - 3, HB[1] + 1]], 1.2, L.frameAccent); seg(c, [[ST[0] + 3, ST[1] - 0.4], [HT[0] - 3, HT[1] + 0.4]], 1.2, L.frameAccent); }
+    seg(c, [ST, [-8, -43]], 2, '#9aa0b5'); seg(c, [[-13, -44], [-3, -45]], 3.4, '#16121f');   // seat
+    c.fillStyle = '#9aa0b5'; c.beginPath(); c.arc(BB[0], BB[1], 3.6, 0, Math.PI * 2); c.fill();
+    seg(c, [[BB[0] - 6, BB[1] + 2], [BB[0] + 6, BB[1] - 2]], 2, '#16121f');
+    c.restore();
+    // front: wheel, fork, head tube, bars (bars spin around the stem)
+    bmxWheel(c, FW, R, L);
+    c.fillStyle = '#c9ceda'; c.fillRect(FW[0] - 4, FW[1] - 1.5, 8, 3);                 // front peg
+    seg(c, [HT, FW], 3, fs); seg(c, [HT, HB], 4.4, fs);
+    c.save();
+    if (L.barGlow) { c.shadowColor = L.bar; c.shadowBlur = 8; }
+    c.translate(13, 0); c.scale(pose.barX == null ? 1 : pose.barX, 1); c.translate(-13, 0);
+    seg(c, [HT, [12, -52]], 3, '#9aa0b5'); seg(c, [[12, -52], [10, -59]], 3, L.bar); seg(c, [[7, -59], [17, -59]], 3, L.bar);
+    seg(c, [[13, -59], [18, -59]], 4, '#16121f');
+    c.restore();
+    c.restore();
+  }
   function drawSkateboard(c, pose, r) {
     var L = r.look || lookFor(r);
     c.save(); c.translate(0, -9); c.rotate(pose.boardRot || 0); c.scale(pose.spinX == null ? 1 : pose.spinX, pose.flipY == null ? 1 : pose.flipY);
@@ -529,7 +816,7 @@
     if (L.wheelGlow) { c.save(); c.shadowColor = L.wheel; c.shadowBlur = 8; }
     c.fillStyle = L.wheel; [-21, 21].forEach(function (x) { c.beginPath(); c.arc(x, 5, 3.8, 0, Math.PI * 2); c.fill(); });
     if (L.wheelGlow) c.restore();
-    seg(c, [[-35, -6], [-27, -1], [27, -1], [35, -6]], 5, L.deck);
+    seg(c, [[-35, -6], [-27, -1], [27, -1], [35, -6]], 5, L.deckPattern === 'holo' ? rainbowGrad(c, -35, 35) : L.deck);
     if (L.deckPattern === 'split') seg(c, [[0, -1], [27, -1], [35, -6]], 5, L.deckAccent);
     else deckPattern(c, L.deckPattern, L.deckAccent, -27, 27, -3.5, 5);
     seg(c, [[-34, -8], [-27, -3.5], [27, -3.5], [34, -8]], 1.5, '#16121f');
@@ -540,7 +827,7 @@
     c.save(); c.rotate(pose.boardRot || 0);
     // deck + rear wheel spin around the stem (tailwhip)
     c.save(); c.translate(23, 0); c.scale(pose.spinX == null ? 1 : pose.spinX, 1); c.translate(-23, 0);
-    c.fillStyle = L.deck; roundRectC(c, -26, -13, 48, 6, 3); c.fill();
+    c.fillStyle = L.deckPattern === 'holo' ? rainbowGrad(c, -26, 22) : L.deck; roundRectC(c, -26, -13, 48, 6, 3); c.fill();
     c.save(); roundRectC(c, -26, -13, 48, 6, 3); c.clip();
     if (L.deckPattern === 'split') { c.fillStyle = L.deckAccent; c.fillRect(-2, -13, 24, 6); }
     else deckPattern(c, L.deckPattern, L.deckAccent, -25, 21, -11.5, 4.5);
@@ -549,6 +836,7 @@
     c.fillStyle = '#9aa0b5'; c.fillRect(-31, -14, 8, 2.5);
     wheel(c, -25, -6, L); c.restore();
     // stem, fork, front wheel
+    if (L.barGlow) { c.shadowColor = L.bar; c.shadowBlur = 8; }
     seg(c, [[26, -6], [22, -14], [18, -79]], 4, L.bar);
     wheel(c, 26, -6, L);
     c.save(); c.translate(18, -79); c.scale(pose.barX == null ? 1 : pose.barX, 1);
@@ -592,6 +880,7 @@
       case 'tailwhip': pose.spinX = spin; pose.feetLift = Math.sin(Math.PI * q) * 12; break;
       case 'barspin': pose.barX = spin; break;
       case 'threesixty': pose.bodyScaleX = spin; break;
+      case 'tabletop': pose.flipY = 1 - 0.62 * Math.sin(Math.PI * q); pose.boardRot = -0.14 * Math.sin(Math.PI * q); pose.bodyRot = -0.1 * Math.sin(Math.PI * q); break;
     }
     return pose;
   }
@@ -632,7 +921,10 @@
     ctx.fillStyle = '#1a1030';
     var n = Math.max(2, Math.round((b - a) / 55));
     for (var i = 0; i <= n; i++) { var px = a + 6 + (b - a - 12) * i / n; ctx.fillRect(px - 2.5, y, 5, GRIND.railH - 2); ctx.fillRect(px - 6, GROUND_Y - 4, 12, 3); }
-    ctx.fillStyle = '#b8bccf'; ctx.fillRect(a, y - 2, b - a, 5);
+    var glow = curPlace && curPlace.railGlow;
+    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 12; }
+    ctx.fillStyle = glow || '#b8bccf'; ctx.fillRect(a, y - 2, b - a, 5);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff'; ctx.fillRect(a, y - 2, b - a, 1.4);
     ctx.fillStyle = '#ff7a3d'; ctx.fillRect(a, y + 2, b - a, 1.2);
     ctx.fillStyle = '#6f7390'; ctx.fillRect(a - 1, y - 3, 3, 7); ctx.fillRect(b - 2, y - 3, 3, 7);
@@ -730,6 +1022,7 @@
   }
   function endRound() {
     G.screen = 'end'; setPhase('idle');
+    var before = getStats();
     var lv = level(), bestKey = 'best_' + lv.id, best = store.get(bestKey, 0), isNew = G.score > best && G.score > 0;
     if (isNew) { best = G.score; store.set(bestKey, best); }
     var total = G.correct + G.wrong, acc = total ? Math.round(G.correct / total * 100) : 0;
@@ -737,18 +1030,31 @@
     $('#newBest').classList.toggle('show', isNew);
     $('#eLine').textContent = lv.name + ' · ' + G.correct + ' of ' + total + ' correct';
     // coins + milestone stats (only for finished rounds)
-    var before = getStats(), cp = G.coinParts;
+    var cp = G.coinParts;
     if (total >= COINS.accuracyMinAnswers && acc >= COINS.accuracyMin) cp.bonus += COINS.accuracyBonus;
     if (isNew) cp.bonus += COINS.bestBonus;
     var earned = cp.answers + cp.streak + cp.grinds + cp.bonus; setCoins(getCoins() + earned);
+    var enough = total >= 8, done = before.levelsDone.slice(); if (done.indexOf(lv.id) < 0) done.push(lv.id);
     var after = { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
-      l5acc80: before.l5acc80 || (lv.id === 5 && total >= 8 && acc >= 80), l5bestAcc: lv.id === 5 && total >= 8 ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc };
-    store.set('stats', after);
+      l5acc80: before.l5acc80 || (lv.id === 5 && enough && acc >= 80), l5bestAcc: lv.id === 5 && enough ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc,
+      levelsDone: done, bestAcc: enough ? Math.max(before.bestAcc, acc) : before.bestAcc, l5perfect: before.l5perfect || (lv.id === 5 && enough && acc === 100),
+      best3: store.get('best_3', 0) };
+    var toSave = {}; for (var sk in after) if (sk !== 'best3') toSave[sk] = after[sk]; store.set('stats', toSave);
     $('#eCoins').textContent = '+' + earned;
     var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
     $('#eCoinLine').textContent = (parts.length ? parts.join(' · ') + ' · ' : '') + 'total ' + getCoins();
-    var newly = GEAR.filter(function (it) { return it.unlock && !achieved(it.unlock, before) && achieved(it.unlock, after); });
-    var ul = $('#eUnlock'); ul.textContent = newly.length ? 'UNLOCKED in the shop: ' + newly.map(function (it) { return it.name; }).join(', ') + '!' : ''; ul.classList.toggle('show', newly.length > 0);
+    var newGoals = GOALS.filter(function (g) { return !achieved(g.id, before) && achieved(g.id, after); });
+    var ul = $('#eUnlock'); ul.innerHTML = '';
+    if (newGoals.length) {
+      var hd = document.createElement('div'); hd.className = 'ulHead'; hd.textContent = '🔓 UNLOCKED!'; ul.appendChild(hd);
+      newGoals.forEach(function (g) {
+        var row = document.createElement('div'); row.className = 'ulRow';
+        var rw = rewardsFor(g.id).map(function (r) { return '<b>' + r.name + '</b> <small>' + r.kind + '</small>'; }).join(' · ');
+        row.innerHTML = '<span class="ulGoal">✓ ' + g.text + '</span><span class="ulRew">' + rw + '</span>'; ul.appendChild(row);
+      });
+      var ft = document.createElement('div'); ft.className = 'ulFoot'; ft.textContent = 'Gear is in the shop · places and rides on the start screen'; ul.appendChild(ft);
+    }
+    ul.classList.toggle('show', newGoals.length > 0); G.lastUnlocks = newGoals.map(function (g) { return g.id; });
     var box = $('#eFacts'); box.innerHTML = '';
     G.roundMissed.forEach(function (f) { var d = document.createElement('div'); d.className = 'fact'; d.textContent = f.text; box.appendChild(d); });
     var shown = G.roundMissed.map(function (f) { return f.key; }), m = getMissed();
@@ -810,10 +1116,7 @@
   // ---------- render ----------
   function render() {
     ctx.setTransform(scale, 0, 0, scale, 0, -TOP * scale);
-    drawSky(G.t);
-    drawCity(farCity, 0.08, GROUND_Y - 10, '#3d1d52', 'rgba(255,190,120,0.35)', 0);
-    drawCity(nearCity, 0.25, GROUND_Y - 4, '#26143a', 'rgba(255,210,130,0.55)', 300);
-    drawProps(); drawLamps(); drawGround();
+    drawBackdrop(G.t);
     var rx = riderX();
     if (G.screen === 'play' && G.gateState !== 'none' && G.gateState !== undefined && G.prob) {
       var gx = rx + 12 + G.gateDist;
@@ -873,6 +1176,7 @@
   document.addEventListener('keydown', function (e) {
     if (G.screen === 'expired') return;
     if (G.screen === 'shop') { if (e.key === 'Escape') closeShop(); return; }
+    if (G.screen === 'goals') { if (e.key === 'Escape') closeGoals(); return; }
     if (G.screen === 'album') { if (e.key === 'Escape') { if (viewing) closeViewer(); else closeAlbum(); } return; }
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
@@ -911,9 +1215,13 @@
       var b = document.createElement('button'); b.className = 'rider'; b.setAttribute('data-id', r.id);
       var c = document.createElement('canvas'); b.appendChild(c);
       var s = document.createElement('span'); s.textContent = r.name; b.appendChild(s);
-      b.addEventListener('click', function () { settings.rider = r.id; store.set('rider', r.id); refreshMenu(); });
+      b.addEventListener('click', function () {
+        if (!rideUnlocked(r)) { var g = ACHIEVEMENTS[r.unlock], pr = g.progress(getStats()); $('#lockNote').textContent = '🔒 ' + r.name + ' unlocks when you ' + g.text.charAt(0).toLowerCase() + g.text.slice(1) + ' (' + g.label + ': ' + pr[0] + ' / ' + pr[1] + '). See GOALS.'; return; }
+        settings.rider = r.id; store.set('rider', r.id); $('#lockNote').textContent = ''; refreshMenu();
+      });
       rp.appendChild(b); previews.push({ c: c, r: r });
     });
+    buildPlaces();
     var lp = $('#levelPick'); lp.innerHTML = '';
     LEVELS.forEach(function (lv) {
       var b = document.createElement('button'); b.className = 'lvl'; b.setAttribute('data-level', lv.id);
@@ -930,12 +1238,13 @@
       b.classList.toggle('sel', id === settings.level); b.querySelector('.b').textContent = best ? 'BEST ' + best : '';
     });
     $$('#modePick button').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-mode') === settings.mode); });
-    $('#coinTotal').textContent = getCoins(); refreshAlbumCount();
+    $('#coinTotal').textContent = getCoins(); refreshAlbumCount(); refreshPlacesAndRides();
     var m = getMissed(), n = Object.keys(m).filter(function (k) { return level().fits(m[k]); }).length;
     $('#practiceNote').textContent = n ? n + ' tricky fact' + (n > 1 ? 's' : '') + ' saved for this level — they’ll show up more often.' : 'Missed facts get saved and come back more often until you nail them.';
   }
   function applyMode() { document.body.classList.toggle('mode-choices', settings.mode === 'choices'); }
   function drawPreviews() {
+    if (placeThumbsDirty) placeThumbsDirty = !placeThumbs.every(function (p) { return paintPlaceThumb(p.c, p.id); });
     previews.forEach(function (pv) {
       var c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
       var d = Math.min(window.devicePixelRatio || 1, 3); if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
@@ -952,7 +1261,7 @@
 
   // ---------- gear shop UI ----------
   var shopCat = 'shirt', shopCards = [];
-  var PREVIEW = { shirt: { k: 1 / 118, gy: 0.93 }, helmet: { k: 1 / 42, gy: 2.3 }, board: { k: 1 / 70, gy: 0.9 }, scooter: { k: 1 / 100, gy: 0.93 } };
+  var PREVIEW = { shirt: { k: 1 / 118, gy: 0.93 }, helmet: { k: 1 / 42, gy: 2.3 }, board: { k: 1 / 70, gy: 0.9 }, scooter: { k: 1 / 100, gy: 0.93 }, bmx: { k: 1 / 108, gy: 0.93 } };
   function previewRider(cat) { var c = GEAR_CATS.filter(function (x) { return x.id === cat; })[0]; return riderById(c && c.rider ? c.rider : settings.rider); }
   function openShop() {
     if (pilotExpired()) { showPilotEnded(); return; }
@@ -968,7 +1277,7 @@
       tabs.appendChild(b);
     });
     var cat = GEAR_CATS.filter(function (x) { return x.id === shopCat; })[0];
-    $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name.toLowerCase() + '.' : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
+    $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name + (rideUnlocked(riderById(cat.rider)) ? '.' : ' (ride unlocks with a goal, see GOALS; gear can be bought now).') : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
     var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = [];
     var stats = getStats(), coins = getCoins();
     GEAR.filter(function (it) { return it.cat === shopCat; }).forEach(function (it) {
@@ -1042,15 +1351,12 @@
   function renderSnapCard(dressedRider, trick, entry) {
     var W = SNAP_W, H = SNAP_H, cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
     var x = cnv.getContext('2d');
-    var saved = { ctx: ctx, VW: VW, TOP: TOP, wx: G.worldX, parts: G.particles };
+    var saved = { ctx: ctx, VW: VW, TOP: TOP, wx: G.worldX, parts: G.particles, cp: curPlace };
     var LVW = 260, k = W / LVW, LVH = H / k, rx = LVW * 0.5;
     try {
       ctx = x; VW = LVW; TOP = 400 - LVH; G.worldX = 400 + Math.random() * 2600; G.particles = [];
       x.setTransform(k, 0, 0, k, 0, -TOP * k);
-      drawSky(entry.t / 1000);
-      drawCity(farCity, 0.08, GROUND_Y - 10, '#3d1d52', 'rgba(255,190,120,0.35)', 0);
-      drawCity(nearCity, 0.25, GROUND_Y - 4, '#26143a', 'rgba(255,210,130,0.55)', 300);
-      drawProps(); drawLamps(); drawGround();
+      drawBackdrop(entry.t / 1000, entry.place);
       // motion streaks
       x.strokeStyle = 'rgba(255,255,255,0.28)'; x.lineWidth = 1.6; x.lineCap = 'round';
       for (var i = 0; i < 6; i++) { var ly = GROUND_Y - 40 - i * 16, lx = rx - 70 - (i % 3) * 18; x.beginPath(); x.moveTo(lx, ly); x.lineTo(lx - 40 - (i % 2) * 20, ly); x.stroke(); }
@@ -1060,7 +1366,7 @@
         for (var s = 0; s < 18; s++) { var sx = rx - 14 - Math.random() * 40, sy = GROUND_Y - GRIND.railH - Math.random() * 14; x.fillRect(sx, sy, 1.6, 1.6); }
       }
       drawRider(x, rx, GROUND_Y, RIDER_SCALE * 1.05, dressedRider, peakPose(trick));
-    } finally { ctx = saved.ctx; VW = saved.VW; TOP = saved.TOP; G.worldX = saved.wx; G.particles = saved.parts; }
+    } finally { ctx = saved.ctx; VW = saved.VW; TOP = saved.TOP; G.worldX = saved.wx; G.particles = saved.parts; curPlace = saved.cp; }
     // overlays in pixel space
     x.setTransform(1, 0, 0, 1, 0, 0);
     var tg = x.createLinearGradient(0, 0, 0, 200); tg.addColorStop(0, 'rgba(20,10,38,0.75)'); tg.addColorStop(1, 'rgba(20,10,38,0)'); x.fillStyle = tg; x.fillRect(0, 0, W, 200);
@@ -1090,7 +1396,7 @@
   }
   function takeSnapshot(streak, performed) {
     var r = rider(), album = getAlbum(), trick = chooseSnapTrick(r, performed, album), now = Date.now();
-    var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: settings.level, levelName: level().name };
+    var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: settings.level, levelName: level().name, place: settings.place };
     try { entry.img = renderSnapCard(dress(r), trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
     album.push(entry);
     if (!saveAlbum(album)) return null;
@@ -1158,6 +1464,91 @@
   $('#saveSnap').addEventListener('click', saveViewing);
   $('#delSnap').addEventListener('click', deleteViewing);
 
+
+  // ---------- place picker + goals screen ----------
+  var placeThumbs = [], placeThumbsDirty = true;
+  function dprOf() { return Math.min(window.devicePixelRatio || 1, 3); }
+  function paintPlaceThumb(cnv, placeId) {
+    var w = cnv.clientWidth, h = cnv.clientHeight; if (!w || !h) return false;
+    var d = dprOf(); cnv.width = Math.round(w * d); cnv.height = Math.round(h * d);
+    var x = cnv.getContext('2d'); x.__dpr = d; paintBackdrop(x, w, h, placeId, 240, 345, 520);
+    return true;
+  }
+  function buildPlaces() {
+    var pp = $('#placePick'); pp.innerHTML = ''; placeThumbs = [];
+    PLACES.forEach(function (pl) {
+      var b = document.createElement('button'); b.className = 'place'; b.setAttribute('data-place', pl.id);
+      var c = document.createElement('canvas'); b.appendChild(c);
+      var s = document.createElement('span'); s.className = 'pname'; s.textContent = pl.name; b.appendChild(s);
+      var lk = document.createElement('span'); lk.className = 'plock'; b.appendChild(lk);
+      b.addEventListener('click', function () {
+        if (!placeUnlocked(pl)) { var g = ACHIEVEMENTS[pl.unlock], pr = g.progress(getStats()); $('#lockNote').textContent = '🔒 ' + pl.name + ': ' + g.text + ' (' + g.label + ': ' + pr[0] + ' / ' + pr[1] + '). See GOALS.'; return; }
+        settings.place = pl.id; store.set('place', pl.id); $('#lockNote').textContent = ''; refreshMenu();
+      });
+      pp.appendChild(b); placeThumbs.push({ c: c, id: pl.id });
+    });
+    placeThumbsDirty = true;
+  }
+  function refreshPlacesAndRides() {
+    var st = getStats();
+    $$('.place').forEach(function (b) {
+      var pl = PLACE_BY_ID[b.getAttribute('data-place')], ok = placeUnlocked(pl, st);
+      b.classList.toggle('sel', pl.id === settings.place); b.classList.toggle('locked', !ok);
+      b.querySelector('.plock').textContent = ok ? '' : '🔒 ' + ACHIEVEMENTS[pl.unlock].text;
+    });
+    $$('.rider').forEach(function (b) {
+      var r = riderById(b.getAttribute('data-id')), ok = rideUnlocked(r, st);
+      b.classList.toggle('locked', !ok);
+      b.querySelector('span').textContent = ok ? r.name : '🔒 ' + r.name;
+    });
+    var n = GOALS.filter(function (g) { return achieved(g.id, st); }).length;
+    $('#goalsCount').textContent = n + '/' + GOALS.length;
+  }
+  function paintReward(cnv, rw) {
+    var w = cnv.clientWidth, h = cnv.clientHeight; if (!w || !h) return;
+    var d = dprOf(); cnv.width = Math.round(w * d); cnv.height = Math.round(h * d);
+    var x = cnv.getContext('2d');
+    if (rw.type === 'place') { x.__dpr = d; paintBackdrop(x, w, h, rw.place.id, 240, 345, 520); return; }
+    x.setTransform(d, 0, 0, d, 0, 0);
+    var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#4a1d5e'); g.addColorStop(0.75, '#d2505a'); g.addColorStop(1, '#ffb35c');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    if (rw.type === 'ride') { x.fillStyle = '#26143a'; x.fillRect(0, h * 0.9, w, h); drawRider(x, w / 2, h * 0.9, h / 118, dress(rw.rider), idlePose(1)); return; }
+    var it = rw.item, P = PREVIEW[it.cat] || PREVIEW.shirt, eq = {}; for (var k in gear.equipped) eq[k] = gear.equipped[k]; eq[it.cat] = it.id;
+    x.fillStyle = '#26143a'; x.fillRect(0, h * P.gy, w, h);
+    drawRider(x, w / 2 - (it.cat === 'helmet' ? 4 : 0), h * P.gy, h * P.k, dress(previewRider(it.cat), eq), idlePose(1));
+  }
+  function openGoals() {
+    if (pilotExpired()) { showPilotEnded(); return; }
+    G.screen = 'goals'; el.menu.classList.remove('show'); $('#goals').classList.add('show'); buildGoals();
+  }
+  function closeGoals() { $('#goals').classList.remove('show'); toMenu(); }
+  function buildGoals() {
+    var st = getStats(), list = $('#goalList'), thumbs = []; list.innerHTML = '';
+    var doneN = GOALS.filter(function (g) { return achieved(g.id, st); }).length;
+    $('#goalsSub').textContent = doneN + ' of ' + GOALS.length + ' goals done · progress counts finished rounds';
+    GOAL_TIERS.forEach(function (tier) {
+      var h = document.createElement('h2'); h.className = 'tierHead tier-' + tier.id; h.textContent = tier.name; list.appendChild(h);
+      GOALS.filter(function (g) { return g.tier === tier.id; }).forEach(function (g) {
+        var pr = g.progress(st), done = pr[0] >= pr[1], u = g.unit || '';
+        var row = document.createElement('div'); row.className = 'goal' + (done ? ' done' : ''); row.setAttribute('data-goal', g.id);
+        var rws = rewardsFor(g.id);
+        row.innerHTML = '<div class="gchk">' + (done ? '✓' : '') + '</div>' +
+          '<div class="gbody"><div class="gtext">' + g.text + '</div>' +
+          '<div class="gbar"><i style="width:' + Math.round(pr[0] / pr[1] * 100) + '%"></i></div>' +
+          '<div class="gprog">' + g.label + ': ' + pr[0].toLocaleString('en-US') + u + ' / ' + pr[1].toLocaleString('en-US') + u + '</div>' +
+          '<div class="grew">Reward: ' + rws.map(function (r) { return '<b>' + r.name + '</b> <small>(' + r.kind + ')</small>'; }).join(', ') + '</div></div>' +
+          '<div class="gthumbs"></div>';
+        var th = row.querySelector('.gthumbs');
+        rws.slice(0, 2).forEach(function (r) { var c = document.createElement('canvas'); th.appendChild(c); thumbs.push([c, r]); });
+        list.appendChild(row);
+      });
+    });
+    requestAnimationFrame(function () { thumbs.forEach(function (t) { paintReward(t[0], t[1]); }); });
+  }
+  $('#goalsBtn').addEventListener('click', openGoals);
+  $('#goalsBack').addEventListener('click', closeGoals);
+  $('#goalsClose').addEventListener('click', closeGoals);
+
   // ---------- loop ----------
   var last = performance.now();
   function frame(now) {
@@ -1193,7 +1584,7 @@
   function pilotExpired() { return !!pilot && Date.now() > pilot.until.ms; }
   function showPilotEnded() {
     G.screen = 'expired'; setPhase('idle');
-    [el.menu, el.end, el.pause, $('#shop'), $('#album'), $('#viewer')].forEach(function (o) { o.classList.remove('show'); });
+    [el.menu, el.end, el.pause, $('#shop'), $('#album'), $('#viewer'), $('#goals')].forEach(function (o) { o.classList.remove('show'); });
     el.banner.className = 'hide'; $('#pilotEnded').classList.add('show');
   }
   function pilotLabel() {
@@ -1206,6 +1597,10 @@
   // re-check every 30s so an open tab stops at the deadline (between rounds, never mid-round)
   if (pilot) setInterval(function () { if (pilotExpired() && G.screen !== 'play' && G.screen !== 'expired') showPilotEnded(); }, 30000);
 
+  // saved choices that are no longer valid/unlocked fall back to defaults (older saves migrate cleanly)
+  if (riderById(settings.rider).id !== settings.rider || !rideUnlocked(riderById(settings.rider))) settings.rider = 'skate';
+  if (!PLACE_BY_ID[settings.place] || !placeUnlocked(PLACE_BY_ID[settings.place])) settings.place = 'street';
+  window.addEventListener('resize', function () { placeThumbsDirty = true; });
   buildMenu(); refreshMenu(); applyMode(); resize(); updateHUD(); el.banner.className = 'hide';
   if (pilotExpired()) showPilotEnded();
   requestAnimationFrame(frame);

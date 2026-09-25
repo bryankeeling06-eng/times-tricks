@@ -10,7 +10,7 @@
 <title>Times Tricks — Multiplication Street Runner</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<link rel="stylesheet" href="style.css?v=6" />
+<link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
 <div id="app">
@@ -55,8 +55,15 @@
       <div class="coinRow">
         <div class="coinPill"><i class="coin"></i><b id="coinTotal">0</b><small>coins</small></div>
         <button id="shopBtn" class="shopBtn">GEAR SHOP</button>
+      </div>
+      <div class="coinRow">
+        <button id="goalsBtn" class="shopBtn goalsBtn">★ GOALS <span id="goalsCount" class="cnt">0/0</span></button>
         <button id="albumBtn" class="shopBtn albumBtn">ALBUM <span id="albumCount" class="cnt hidden">0</span></button>
       </div>
+      <p id="lockNote" class="note lockNote"></p>
+
+      <h2>Place</h2>
+      <div id="placePick" class="places"></div>
 
       <h2>Level</h2>
       <div id="levelPick" class="levels"></div>
@@ -87,6 +94,7 @@
     <div class="panel">
       <h2 class="endTitle">ROUND OVER</h2>
       <div id="newBest" class="newBest">NEW PERSONAL BEST!</div>
+      <div id="eUnlock" class="unlockMsg"></div>
       <div class="stats">
         <div><small>SCORE</small><b id="eScore">0</b></div>
         <div><small>BEST</small><b id="eBest">0</b></div>
@@ -95,7 +103,6 @@
       </div>
       <div class="coinsEarned"><i class="coin big"></i><b id="eCoins">+0</b><span>coins earned</span></div>
       <p id="eCoinLine" class="note coinLine"></p>
-      <div id="eUnlock" class="unlockMsg"></div>
       <p id="eLine" class="note"></p>
       <h2>Facts to practice</h2>
       <div id="eFacts" class="facts"></div>
@@ -144,11 +151,24 @@
     </div>
   </div>
 
+  <!-- Goals ladder -->
+  <div id="goals" class="overlay">
+    <div class="panel shopPanel">
+      <div class="shopHead">
+        <h2 class="endTitle">GOALS</h2>
+        <button id="goalsClose" class="hbtn" aria-label="Close goals">✕</button>
+      </div>
+      <p id="goalsSub" class="note shopHint"></p>
+      <div id="goalList" class="goalList"></div>
+      <button id="goalsBack" class="big alt">BACK</button>
+    </div>
+  </div>
+
   <!-- Pause -->
   <div id="pause" class="overlay">
     <div class="panel small"><h2 class="endTitle">PAUSED</h2><button id="resumeBtn" class="big">RESUME ▶</button></div>
   </div>
 </div>
-<script src="game.js?v=6"></script>
+<script src="game.js?v=7"></script>
 </body>
 </html>
