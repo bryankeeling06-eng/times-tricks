@@ -175,6 +175,7 @@ h2{font-size:12px;letter-spacing:.16em;color:var(--muted);margin:14px 0 6px;text
   background:rgba(21,12,38,.9);border:2px solid var(--gold);color:#fff;font-weight:900;font-size:15px;padding:7px 14px;border-radius:999px;
   transition:opacity .2s,transform .2s;white-space:nowrap}
 .snapToast.show{opacity:1;transform:translate(-50%,0)}
+.snapToast.long{white-space:normal;width:max-content;max-width:86%;text-align:center;border-radius:16px;line-height:1.25}
 .albumBtn{flex:0 0 auto;padding:10px 12px;background:linear-gradient(#8ff5ee,#19c3c0);box-shadow:0 4px 0 #0a5f53;color:#062a26;display:flex;align-items:center;gap:6px}
 .albumBtn:active{box-shadow:0 1px 0 #0a5f53}
 .cnt{background:#062a26;color:#8ff5ee;border-radius:999px;font-size:12px;padding:1px 7px}

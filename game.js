@@ -178,14 +178,16 @@
     { id: 'streak20', tier: 'medium', text: 'Hit a 20-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 20); } },
     { id: 'l5acc80', tier: 'medium', text: 'Finish a Level 5 round with 80%+ accuracy (8+ answers)', label: 'Level 5 best accuracy', unit: '%', progress: function (s) { return [s.l5acc80 ? 80 : Math.min(s.l5bestAcc, 79), 80]; } },
     { id: 'l3pb', tier: 'medium', text: 'Score ' + L3_PB_GOAL.toLocaleString('en-US') + '+ on Level 3', label: 'Level 3 best', progress: function (s) { return upTo(s.best3, L3_PB_GOAL); } },
-    { id: 'b_streak30', tier: 'big', text: 'Hit a 30-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 30); } },
+    // Big streak goal (fix-set 3): a 20-streak on Level 3, 4 or 5. The id stays 'b_streak30' so its rewards and saves
+    // carry over; kids who already hit a 30-streak under the old rule keep it (old30, stamped once, see getStats).
+    { id: 'b_streak30', tier: 'big', text: 'Hit a 20-streak on Level 3 or higher', label: 'Best streak on Levels 3\u20135', progress: function (s) { return s.old30 ? [20, 20] : upTo(s.streakL3, 20); } },
     { id: 'b_perfect5', tier: 'big', text: 'Perfect round on Level 5 (100%, 8+ answers)', label: 'Perfect Level 5 rounds', progress: function (s) { return upTo(s.l5perfect ? 1 : 0, 1); } },
     { id: 'p_night', tier: 'big', text: 'Land 50 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 50); } }
   ];
   var ACHIEVEMENTS = {}; GOALS.forEach(function (g) { ACHIEVEMENTS[g.id] = g; });
   // Saved stats (tt_stats). This is the ONLY list of stat fields: getStats() reads them (typed) and saveStats()
   // writes them merged over the raw save, so fields this version doesn't know about survive.
-  var STAT_FIELDS = { bestStreak: 'num', grinds: 'num', rounds: 'num', bestAcc: 'num', l5bestAcc: 'num', l5acc80: 'bool', l5perfect: 'bool', levelsDone: 'levels' };
+  var STAT_FIELDS = { bestStreak: 'num', grinds: 'num', rounds: 'num', bestAcc: 'num', l5bestAcc: 'num', l5acc80: 'bool', l5perfect: 'bool', levelsDone: 'levels', streakL3: 'num', old30: 'bool' };
   function rawStats() { return obj(store.get('stats', {})); }
   function getBest(id) { return Math.max(0, num(store.get('best_' + id, 0), 0)); }
   function readStat(type, v) {
@@ -196,13 +198,16 @@
   function getStats() {
     var s = rawStats(), out = {};
     for (var f in STAT_FIELDS) out[f] = readStat(STAT_FIELDS[f], s[f]);
+    // saves from before goals v2 have no level info for their best streak: a stored 30+ keeps the old Big goal (and its
+    // reward); nothing else is granted, Levels 3+ streaks are tracked from now. The next save stamps goalsV 2.
+    if (num(s.goalsV, 0) < 2) out.old30 = out.bestStreak >= 30;
     for (var L = 1; L <= 5; L++) if (getBest(L) > 0 && out.levelsDone.indexOf(L) < 0) out.levelsDone.push(L);   // migrate older saves
     out.best3 = getBest(3);
     return out;
   }
   function saveStats(stats) {
     if (saveTooNew) return false;
-    var updates = {}; for (var f in STAT_FIELDS) updates[f] = stats[f];
+    var updates = { goalsV: 2 }; for (var f in STAT_FIELDS) updates[f] = stats[f];
     return store.set('stats', Object.assign({}, rawStats(), updates, { v: SAVE_V }));
   }
   function rewardsFor(id) {
@@ -345,7 +350,16 @@
   };
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
-  window.__tt.snap = function (streak) { return takeSnapshot(streak || 5, G.trick); };
+  window.__tt.snap = function (streak, trickId) {   // test hook: save a card now (named trick, else the current trick if new, else the first missing one)
+    var r = rider(), t = trickId ? rideTricks(r).filter(function (x) { return x.id === trickId; })[0] : null;
+    if (!t) { var miss = missingTricks(r); t = G.trick && miss.some(function (x) { return x.id === G.trick.id; }) ? G.trick : (miss[0] || G.trick || collectible(r)[0]); }
+    return takeSnapshot(streak || 5, t);
+  };
+  window.__tt.snapHold = function () { return !!G.snapHold; };
+  window.__tt.collectible = function (id) { return collectible(riderById(id || settings.rider)).map(function (t) { return t.id; }); };
+  window.__tt.buy = function (id) { return buyItem(id); };
+  window.__tt.equip = function (id) { return equipItem(id); };
+  window.__tt.endLocked = function () { return endLocked(); };
   window.__tt.album = function () { return albumRun(function () { return album.list.map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, place: e.place || 'street', kb: e.kb }; }); }); };
   window.__tt.albumImgs = function () { return albumImgs(album.list.map(function (e) { return e.id; })).then(function (o) { return album.list.map(function (e) { return o[e.id] || null; }); }); };
   window.__tt.albumInfo = function () { return albumRun(function () { return albumInfo(); }); };
@@ -1115,7 +1129,7 @@
     audio();
     G.screen = 'play'; G.score = 0; G.streak = 0; G.topStreak = 0; G.correct = 0; G.wrong = 0; G.timeLeft = ROUND_SECONDS;
     G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false; G.sinceGrind = 0; G.lastWasGrind = false;
-    G.roundGrinds = 0; G.coinParts = { answers: 0, streak: 0, grinds: 0, bonus: 0 }; G.passed = false; G.dusted = false;
+    G.roundGrinds = 0; G.coinParts = { answers: 0, streak: 0, grinds: 0, bonus: 0 }; G.passed = false; G.dusted = false; G.snapHold = false; G.fullTold = false;
     el.menu.classList.remove('show'); el.end.classList.remove('show'); el.pause.classList.remove('show'); el.quitAsk.classList.remove('show');
     setPhase('ready'); el.banner.className = ''; el.prompt.textContent = 'READY…'; el.gateBar.style.width = '0%';
     clearInput(); updateHUD(); applyMode();
@@ -1156,7 +1170,7 @@
     G.coinParts.answers += COINS.perCorrect; G.coinParts.streak += (m - 1) * COINS.perMultStep;
     G.gateState = 'good'; G.boostSpeed = Math.max(G.speed, G.gateDist / 0.38);
     if (G.trick.grind) startGrind();
-    if (SNAP_STREAKS.indexOf(G.streak) >= 0) queueSnap(G.streak, G.trick);
+    snapCheck(G.trick);
     el.banner.className = 'right'; flashDisplay('flashR');
     if (settings.mode === 'choices') el.choices.forEach(function (b) { if (Number(b.textContent) === p.answer) b.classList.add('good'); });
     pop('+' + pts + '  ' + G.trick.name, '#ffc94d');
@@ -1164,7 +1178,7 @@
     sfx.good(); setPhase('boost'); updateHUD();
   }
   function onWrong(reason, val) {
-    var p = G.prob; G.streak = 0; G.wrong++; recordMiss(p); G.lastWasGrind = false;
+    var p = G.prob; G.streak = 0; G.wrong++; recordMiss(p); G.lastWasGrind = false; G.snapHold = false;
     if (!G.roundMissed.some(function (f) { return f.key === p.key; })) G.roundMissed.push({ key: p.key, text: p.reveal });
     G.gateState = 'bad'; G.wipeT = 0; G.trick = null;
     el.banner.className = 'wrong'; el.prompt.innerHTML = p.revealHTML; flashDisplay('flashW');
@@ -1173,7 +1187,7 @@
     sfx.bad(); setPhase('wipe'); updateHUD();
   }
   function endRound() {
-    G.screen = 'end'; setPhase('idle');
+    G.screen = 'end'; setPhase('idle'); G.snapHold = false; G.endLockUntil = performance.now() + END_LOCK_MS;
     var before = getStats();
     var lv = level(), bestKey = 'best_' + lv.id, best = getBest(lv.id), isNew = G.score > best && G.score > 0;
     if (isNew) { best = G.score; store.set(bestKey, best); }
@@ -1190,10 +1204,10 @@
     var after = Object.assign({}, before, { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
       l5acc80: before.l5acc80 || (lv.id === 5 && enough && acc >= 80), l5bestAcc: lv.id === 5 && enough ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc,
       levelsDone: done, bestAcc: enough ? Math.max(before.bestAcc, acc) : before.bestAcc, l5perfect: before.l5perfect || (lv.id === 5 && enough && acc === 100),
-      best3: getBest(3) });
+      best3: getBest(3), streakL3: lv.id >= 3 ? Math.max(before.streakL3, G.topStreak) : before.streakL3 });
     saveStats(after);
     $('#eCoins').textContent = '+' + earned;
-    var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
+    var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak bonus'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
     $('#eCoinLine').textContent = (parts.length ? parts.join(' · ') + ' · ' : '') + 'total ' + getCoins();
     var newGoals = GOALS.filter(function (g) { return !achieved(g.id, before) && achieved(g.id, after); });
     var ul = $('#eUnlock'); ul.innerHTML = '';
@@ -1217,7 +1231,7 @@
     refreshMenu();
     flushSnaps();
   }
-  function toMenu() { G.screen = 'menu'; setPhase('idle'); G.gateState = 'none'; el.end.classList.remove('show'); el.pause.classList.remove('show'); el.quitAsk.classList.remove('show'); el.menu.classList.add('show'); el.banner.className = 'hide'; refreshMenu(); flushSnaps(); }
+  function toMenu() { G.screen = 'menu'; setPhase('idle'); G.snapHold = false; G.gateState = 'none'; el.end.classList.remove('show'); el.pause.classList.remove('show'); el.quitAsk.classList.remove('show'); el.menu.classList.add('show'); el.banner.className = 'hide'; refreshMenu(); flushSnaps(); }
 
   // ---------- update ----------
   function update(dt) {
@@ -1332,6 +1346,7 @@
     if (G.screen === 'goals') { if (e.key === 'Escape') closeGoals(); return; }
     if (G.screen === 'album') { if (e.key === 'Escape') { if (viewing) closeViewer(); else closeAlbum(); } return; }
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
+    if (G.screen === 'end' && endLocked() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen !== 'play') return;
     if (quitAskOpen()) { if (e.key === 'Escape') keepPlaying(); return; }
@@ -1369,6 +1384,16 @@
   $('#muteBtn').addEventListener('click', function () { settings.muted = !settings.muted; store.set('muted', settings.muted); $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊'; });
   $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊';
   $('#startBtn').addEventListener('click', startRound);
+  // Time-up lockout: a tap meant for the game that lands just as the round ends must not hit RIDE AGAIN / MENU and skip
+  // the results. End-screen button input (pointer + keyboard) is ignored for END_LOCK_MS after the round ends.
+  var END_LOCK_MS = 800;
+  function endLocked() { return G.screen === 'end' && performance.now() < (G.endLockUntil || 0); }
+  ['click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchend'].forEach(function (type) {
+    el.end.addEventListener(type, function (e) {
+      if (!endLocked() || !(e.target.closest && e.target.closest('button'))) return;
+      e.stopPropagation(); if (e.cancelable) e.preventDefault();
+    }, true);
+  });
   $('#againBtn').addEventListener('click', startRound);
   $('#menuBtn').addEventListener('click', toMenu);
 
@@ -1450,14 +1475,19 @@
     var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = []; shopDirty = true;
     var stats = getStats(), coins = getCoins();
     GEAR.filter(function (it) { return it.cat === shopCat; }).forEach(function (it) {
-      var card = document.createElement('div'), own = owns(it.id), eq = gear.equipped[it.cat] === it.id, unlocked = isUnlocked(it, stats);
-      card.className = 'item' + (eq ? ' equipped' : own ? ' owned' : '') + (!unlocked ? ' locked' : ''); card.setAttribute('data-id', it.id);
+      var card = document.createElement('div'), own = owns(it.id), eq = gear.equipped[it.cat] === it.id, unlocked = isUnlocked(it, stats), rideLock = gearRideLock(it, stats);
+      card.className = 'item' + (eq ? ' equipped' : own ? ' owned' : '') + (!unlocked || (rideLock && !eq) ? ' locked' : ''); card.setAttribute('data-id', it.id);
       var cv2 = document.createElement('canvas'); card.appendChild(cv2);
       var nm = document.createElement('div'); nm.className = 'iname'; nm.textContent = it.name; card.appendChild(nm);
       var stt = document.createElement('div'); stt.className = 'istat';
       var btn = document.createElement('button'); btn.className = 'ibtn';
       if (eq) { stt.textContent = 'Equipped'; btn.textContent = 'EQUIPPED'; btn.disabled = true; }
-      else if (own) { stt.textContent = 'Owned'; btn.textContent = 'EQUIP'; btn.classList.add('equip'); btn.addEventListener('click', function () { gear.equipped[it.cat] = it.id; delete gear.keepEq[it.cat]; saveGear(); sfx.tap(); buildShop(); }); }
+      else if (rideLock) {   // gear for a ride that isn't unlocked yet (BMX): can't be bought or equipped
+        var ra = ACHIEVEMENTS[rideLock.unlock], rp = ra.progress(stats);
+        stt.innerHTML = '<span class="req">🔒 Unlock the ' + rideLock.name + ' first: ' + ra.text + '</span><span class="prog">' + rp[0].toLocaleString('en-US') + ' / ' + rp[1].toLocaleString('en-US') + (own || !it.price ? '' : ' · then <i class="coin"></i>' + it.price) + '</span>';
+        btn.textContent = 'LOCKED'; btn.disabled = true;
+      }
+      else if (own) { stt.textContent = 'Owned'; btn.textContent = 'EQUIP'; btn.classList.add('equip'); btn.addEventListener('click', function () { if (equipItem(it.id)) { sfx.tap(); buildShop(); } }); }
       else if (!unlocked) {
         var a = ACHIEVEMENTS[it.unlock], pr = a.progress(stats);
         stt.innerHTML = '<span class="req">🔒 ' + a.text + '</span><span class="prog">' + pr[0].toLocaleString('en-US') + (a.unit || '') + ' / ' + pr[1].toLocaleString('en-US') + (a.unit || '') + ' · then <i class="coin"></i>' + it.price + '</span>';
@@ -1465,21 +1495,31 @@
       } else {
         stt.innerHTML = '<i class="coin"></i>' + it.price + (coins < it.price ? ' <span class="need">need ' + (it.price - coins) + ' more</span>' : '');
         btn.innerHTML = 'BUY <i class="coin"></i>' + it.price; btn.classList.add('buy'); btn.disabled = coins < it.price;
-        btn.addEventListener('click', function () {
-          var coins = getCoins();
-          if (coins < it.price || !isUnlocked(it) || owns(it.id)) return;
-          // save the gear first, then the coins; if either write fails, undo everything so no coins are lost without the item
-          var prevOwned = gear.owned.slice();
-          gear.owned.push(it.id);
-          if (!saveGear()) { gear.owned = prevOwned; purchaseFailed(); return; }
-          if (!setCoins(coins - it.price)) { gear.owned = prevOwned; saveGear(); purchaseFailed(); return; }
-          sfx.good(); buildShop();
-        });
+        btn.addEventListener('click', function () { if (buyItem(it.id)) { sfx.good(); buildShop(); } });
       }
       card.appendChild(stt); card.appendChild(btn); grid.appendChild(card);
       var eqOverride = {}; for (var k in gear.equipped) eqOverride[k] = gear.equipped[k]; eqOverride[it.cat] = it.id;
       shopCards.push({ c: cv2, r: previewRider(it.cat), eq: eqOverride, cat: it.cat });
     });
+  }
+  function gearRideLock(it, stats) {   // -> the ride this gear is for if that ride is still locked (BMX gear before the BMX), else null
+    var c = GEAR_CATS.filter(function (x) { return x.id === it.cat; })[0], r = c && c.rider ? riderById(c.rider) : null;
+    return r && r.id === c.rider && !rideUnlocked(r, stats || getStats()) ? r : null;
+  }
+  function buyItem(id) {   // the only purchase path (shop button + __tt.buy) -> true if bought
+    var it = GEAR_BY_ID[id], coins = getCoins();
+    if (!it || coins < it.price || !isUnlocked(it) || gearRideLock(it) || owns(it.id)) return false;
+    // save the gear first, then the coins; if either write fails, undo everything so no coins are lost without the item
+    var prevOwned = gear.owned.slice();
+    gear.owned.push(it.id);
+    if (!saveGear()) { gear.owned = prevOwned; purchaseFailed(); return false; }
+    if (!setCoins(coins - it.price)) { gear.owned = prevOwned; saveGear(); purchaseFailed(); return false; }
+    return true;
+  }
+  function equipItem(id) {   // -> true if equipped
+    var it = GEAR_BY_ID[id];
+    if (!it || !owns(it.id) || gearRideLock(it)) return false;
+    gear.equipped[it.cat] = it.id; delete gear.keepEq[it.cat]; saveGear(); return true;
   }
   function purchaseFailed() { buildShop(); $('#shopHint').textContent = 'Couldn\u2019t save on this device, so nothing was bought and no coins were spent.'; }
   var shopDirty = true;
@@ -1505,9 +1545,9 @@
 
   // ---------- snapshot album ----------
   // At streaks in SNAP_STREAKS a photo card of the rider (equipped gear, frozen mid-trick) is drawn on an
-  // offscreen canvas as a JPEG data URL (max ALBUM_CAP cards, oldest dropped).
-  // The trick on the card is always one not yet in the album for that ride; once all are used,
-  // it just avoids repeating the most recent one. Nothing is uploaded anywhere.
+  // offscreen canvas as a JPEG data URL (max ALBUM_CAP cards; when full, new cards aren't saved and the kid is told).
+  // The card shows the trick actually landed, only if it's new to that ride's album (see snapCheck). Nothing is
+  // uploaded anywhere.
   //
   // Storage: images live in IndexedDB (db 'times-tricks', stores 'meta' + 'img', both keyed by card id and
   // always written in one transaction). localStorage only holds a small metadata copy (tt_album_meta) so the
@@ -1610,16 +1650,11 @@
     (legacy || []).forEach(function (e) { album.lsImgs[e.id] = e.img; list.push(metaOf(e)); });
     album.list = sortAlbum(list);
   }
-  function lsSave(list) {   // fallback: write whole cards to tt_album within the size budget, dropping the oldest if needed
-    var a = list.slice();
-    while (a.length > ALBUM_CAP) a.shift();
-    for (;;) {
-      var s = JSON.stringify(a.map(function (m) { return Object.assign({}, m, { img: album.lsImgs[m.id] }); }));
-      if (s.length <= ALBUM_LS_BUDGET || a.length <= 1) {
-        try { localStorage.setItem('tt_album', s); return a; } catch (e) { if (a.length <= 1) return null; }
-      }
-      a.shift();
-    }
+  function lsSave(list, adding) {   // fallback: write whole cards to tt_album. Old cards are never dropped: when adding
+    // a card would go over the size budget (or storage is full) the write is refused and the caller reports 'full'
+    var s = JSON.stringify(list.map(function (m) { return Object.assign({}, m, { img: album.lsImgs[m.id] }); }));
+    if (adding && s.length > ALBUM_LS_BUDGET) return null;
+    try { localStorage.setItem('tt_album', s); return list.slice(); } catch (e) { return null; }
   }
   function pruneLsImgs() { var keep = {}; album.list.forEach(function (m) { keep[m.id] = album.lsImgs[m.id]; }); album.lsImgs = keep; }
   function albumInit() {
@@ -1642,24 +1677,22 @@
     });
   }
   function nextSeq() { var n = 0; album.list.forEach(function (e) { n = Math.max(n, num(e.n, 0)); }); return n + 1; }
-  function albumAdd(entry, img) {   // call inside albumRun
-    var meta = metaOf(entry), next = album.list.concat([meta]), drop = next.length > ALBUM_CAP ? next.slice(0, next.length - ALBUM_CAP) : [];
+  function albumAdd(entry, img) {   // call inside albumRun -> true, false (not saved) or 'full' (album/storage full; nothing dropped)
+    if (album.list.length >= ALBUM_CAP) return Promise.resolve('full');
+    var meta = metaOf(entry), next = album.list.concat([meta]);
     if (album.mode === 'idb') {
-      return idbTx(album.db, 'readwrite', function (ms, is) {
-        ms.put(meta); is.put({ id: meta.id, img: img });
-        drop.forEach(function (d) { ms.delete(d.id); is.delete(d.id); });
-      }).then(function () { album.list = next.slice(drop.length); saveMetaCache(); return true; },
-        function (e) { console.warn('snapshot not saved', e); return false; });
+      return idbTx(album.db, 'readwrite', function (ms, is) { ms.put(meta); is.put({ id: meta.id, img: img }); })
+        .then(function () { album.list = next; saveMetaCache(); return true; },
+          function (e) { console.warn('snapshot not saved', e); if (e && e.name === 'QuotaExceededError') { album.fullHit = true; return 'full'; } return false; });
     }
     album.lsImgs[meta.id] = img;
-    var kept = lsSave(next);
-    if (!kept) { delete album.lsImgs[meta.id]; return Promise.resolve(false); }
-    album.list = kept; pruneLsImgs();
-    return Promise.resolve(kept.some(function (m) { return m.id === meta.id; }));
+    var kept = lsSave(next, true);
+    if (!kept) { delete album.lsImgs[meta.id]; album.fullHit = true; return Promise.resolve('full'); }
+    album.list = kept; return Promise.resolve(true);
   }
   function albumRemove(id) {
     return albumRun(function () {
-      var next = album.list.filter(function (m) { return m.id !== id; });
+      var next = album.list.filter(function (m) { return m.id !== id; }); album.fullHit = false;
       if (album.mode === 'idb') {
         return idbTx(album.db, 'readwrite', function (ms, is) { ms.delete(id); is.delete(id); })
           .then(function () { album.list = next; saveMetaCache(); return true; }, function () { return false; });
@@ -1696,13 +1729,27 @@
   }
   album.queue = albumInit();
   function rideTricks(r) { return r.tricks.concat(r.grinds || []); }
-  function chooseSnapTrick(r, performed, list) {
-    var all = rideTricks(r), mine = list.filter(function (e) { return e.rider === r.id; });
-    var used = mine.map(function (e) { return e.trick; });
-    var opts = all.filter(function (t) { return used.indexOf(t.id) < 0; });
-    if (!opts.length) { var lastId = mine.length ? mine[mine.length - 1].trick : null; opts = all.filter(function (t) { return t.id !== lastId; }); }
-    for (var i = 0; i < opts.length; i++) if (performed && opts[i].id === performed.id) return opts[i];
-    return pick(opts);
+  // Album tricks per ride = everything except the base trick (Ollie / Bunny Hop): it's only done below a 3-streak, so it
+  // can never be landed at a snapshot streak. Old Ollie / Bunny Hop cards stay in the album but don't count.
+  function collectible(r) { return rideTricks(r).filter(function (t) { return t.id !== r.tricks[0].id; }); }
+  function missingTricks(r) {   // collectible tricks not yet in this ride's album (cards waiting to be saved count too)
+    var has = {};
+    album.list.forEach(function (e) { if (e.rider === r.id) has[e.trick] = 1; });
+    G.pendingSnaps.forEach(function (q) { if (q.r.id === r.id && q.performed) has[q.performed.id] = 1; });
+    return collectible(r).filter(function (t) { return !has[t.id]; });
+  }
+  function albumFull() { return album.list.length + G.pendingSnaps.length >= ALBUM_CAP; }
+  // Runs on every correct answer. At a snapshot streak the card shows the trick just landed, but only if that trick is
+  // new to this ride's album. If not, the capture is held and taken on the next landed trick that is new, in the same
+  // streak run (a wrong answer or the end of the round cancels it). A ride that already has every trick is skipped quietly.
+  function snapCheck(performed) {
+    if (SNAP_STREAKS.indexOf(G.streak) < 0 && !G.snapHold) return;
+    var r = rider(), miss = missingTricks(r);
+    if (!miss.length) { G.snapHold = false; return; }
+    if (!performed || !miss.some(function (t) { return t.id === performed.id; })) { G.snapHold = true; return; }
+    G.snapHold = false;
+    if (albumFull()) { showAlbumFullToast(); return; }   // never drop old cards to make room
+    queueSnap(G.streak, performed);
   }
   function peakPose(trick) { return trick.grind ? grindPose(trick, 0.46) : trickPose(trick.id, trick.id === 'ollie' || trick.id === 'hop' ? 0.42 : 0.5); }
   function fmtDate(ms) { try { return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { var d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); } }
@@ -1777,11 +1824,12 @@
   function takeSnapshot(streak, performed, state) {   // -> Promise of the saved entry (or null); state = captured at the streak
     var s = state || snapState(), r = s.r;
     return albumRun(function () {
-      var trick = chooseSnapTrick(r, performed, album.list), now = s.t, img;
+      var trick = performed || collectible(r)[0], now = s.t, img;
       var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, n: nextSeq(), rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: s.level, levelName: s.levelName, place: s.place };
       try { img = renderSnapCard(s.dressed, trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
       entry.kb = Math.round(img.length * 0.75 / 1024);
       return albumAdd(entry, img).then(function (ok) {
+        if (ok === 'full') { showAlbumFullToast(); if (G.screen === 'album' && !viewing) buildAlbum(); return null; }
         if (!ok) return null;
         if (!state) showSnapToast();
         refreshAlbumCount();
@@ -1790,22 +1838,27 @@
     });
   }
   var toastTimer = null;
-  function showSnapToast() {
-    var t = $('#snapToast'); t.classList.add('show'); clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  var SNAP_MSG = '\ud83d\udcf8 Snapshot saved!', FULL_MSG = 'Album full! Delete a card to make room for new ones \ud83d\udcf8';
+  function showSnapToast(msg, ms) {
+    var t = $('#snapToast'); t.textContent = msg || SNAP_MSG; t.classList.toggle('long', !!msg); t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, ms || 1600);
   }
+  function showAlbumFullToast() { if (G.fullTold) return; G.fullTold = true; showSnapToast(FULL_MSG, 2800); }   // once per round
   function refreshAlbumCount() { var n = album.list.length; $('#albumCount').textContent = n; $('#albumCount').classList.toggle('hidden', !n); }
 
   // album screens
   function openAlbum() {
     if (pilotExpired()) { showPilotEnded(); return; }
-    G.screen = 'album'; el.menu.classList.remove('show'); $('#album').classList.add('show'); buildAlbum();
+    G.screen = 'album'; el.menu.classList.remove('show'); $('#album').classList.add('show'); buildAlbum(); $('#album').scrollTop = 0;
   }
   function closeAlbum() { closeViewer(); $('#album').classList.remove('show'); toMenu(); }
   var albumBuildN = 0;
   function buildAlbum() {
     var a = album.list.slice().reverse(), grid = $('#albumGrid'), token = ++albumBuildN, ims = {}; grid.innerHTML = '';
-    $('#albumSub').textContent = a.length ? a.length + ' of ' + ALBUM_CAP + ' snapshots · newest first' : '';
+    var full = a.length >= ALBUM_CAP || (album.fullHit && a.length > 0);
+    $('#albumSub').textContent = full ? 'Album full (' + a.length + ' of ' + ALBUM_CAP + ') \u00b7 delete a card to make room for new ones'
+      : a.length ? a.length + ' of ' + ALBUM_CAP + ' snapshots · newest first' : '';
+    $('#albumSub').classList.toggle('full', full);
     $('#albumEmpty').classList.toggle('hidden', a.length > 0);
     a.forEach(function (e) {
       var b = document.createElement('button'); b.className = 'snap'; b.setAttribute('data-id', e.id);
@@ -1911,7 +1964,7 @@
   }
   function openGoals() {
     if (pilotExpired()) { showPilotEnded(); return; }
-    G.screen = 'goals'; el.menu.classList.remove('show'); $('#goals').classList.add('show'); buildGoals();
+    G.screen = 'goals'; el.menu.classList.remove('show'); $('#goals').classList.add('show'); buildGoals(); $('#goals').scrollTop = 0;
   }
   function closeGoals() { $('#goals').classList.remove('show'); toMenu(); }
   function buildGoals() {
