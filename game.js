@@ -175,7 +175,9 @@
     { id: 'm_alllevels', tier: 'medium', text: 'Finish a round on every level (1–5)', label: 'Levels finished', progress: function (s) { return upTo(s.levelsDone.length, 5); } },
     { id: 'r_bmx', tier: 'medium', text: 'Hit a 15-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 15); } },
     { id: 'm_grinds25', tier: 'medium', text: 'Land 25 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 25); } },
-    { id: 'streak20', tier: 'medium', text: 'Hit a 20-streak', label: 'Best streak', progress: function (s) { return upTo(s.bestStreak, 20); } },
+    // Medium streak goal (fix-set 4): a 20-streak on Level 1 or 2, so it can't unlock in the same round as the Big goal.
+    // The id stays 'streak20' (reward: Gold Jersey); saves that already had it keep it (old20, stamped once, see getStats).
+    { id: 'streak20', tier: 'medium', text: 'Hit a 20-streak on Level 1 or 2', label: 'Best streak on Levels 1\u20132', progress: function (s) { return s.old20 ? [20, 20] : upTo(s.streakL12, 20); } },
     { id: 'l5acc80', tier: 'medium', text: 'Finish a Level 5 round with 80%+ accuracy (8+ answers)', label: 'Level 5 best accuracy', unit: '%', progress: function (s) { return [s.l5acc80 ? 80 : Math.min(s.l5bestAcc, 79), 80]; } },
     { id: 'l3pb', tier: 'medium', text: 'Score ' + L3_PB_GOAL.toLocaleString('en-US') + '+ on Level 3', label: 'Level 3 best', progress: function (s) { return upTo(s.best3, L3_PB_GOAL); } },
     // Big streak goal (fix-set 3): a 20-streak on Level 3, 4 or 5. The id stays 'b_streak30' so its rewards and saves
@@ -187,7 +189,7 @@
   var ACHIEVEMENTS = {}; GOALS.forEach(function (g) { ACHIEVEMENTS[g.id] = g; });
   // Saved stats (tt_stats). This is the ONLY list of stat fields: getStats() reads them (typed) and saveStats()
   // writes them merged over the raw save, so fields this version doesn't know about survive.
-  var STAT_FIELDS = { bestStreak: 'num', grinds: 'num', rounds: 'num', bestAcc: 'num', l5bestAcc: 'num', l5acc80: 'bool', l5perfect: 'bool', levelsDone: 'levels', streakL3: 'num', old30: 'bool' };
+  var STAT_FIELDS = { bestStreak: 'num', grinds: 'num', rounds: 'num', bestAcc: 'num', l5bestAcc: 'num', l5acc80: 'bool', l5perfect: 'bool', levelsDone: 'levels', streakL3: 'num', old30: 'bool', streakL12: 'num', old20: 'bool' };
   function rawStats() { return obj(store.get('stats', {})); }
   function getBest(id) { return Math.max(0, num(store.get('best_' + id, 0), 0)); }
   function readStat(type, v) {
@@ -201,13 +203,16 @@
     // saves from before goals v2 have no level info for their best streak: a stored 30+ keeps the old Big goal (and its
     // reward); nothing else is granted, Levels 3+ streaks are tracked from now. The next save stamps goalsV 2.
     if (num(s.goalsV, 0) < 2) out.old30 = out.bestStreak >= 30;
+    // goals v3 (fix-set 4): the Medium 20-streak became Levels 1–2 only. A save from before that with a 20+ best streak
+    // already had it: it keeps the goal (and the Gold Jersey). Levels 1–2 streaks are tracked from now (not back-filled).
+    if (num(s.goalsV, 0) < 3) out.old20 = out.bestStreak >= 20;
     for (var L = 1; L <= 5; L++) if (getBest(L) > 0 && out.levelsDone.indexOf(L) < 0) out.levelsDone.push(L);   // migrate older saves
     out.best3 = getBest(3);
     return out;
   }
   function saveStats(stats) {
     if (saveTooNew) return false;
-    var updates = { goalsV: 2 }; for (var f in STAT_FIELDS) updates[f] = stats[f];
+    var updates = { goalsV: 3 }; for (var f in STAT_FIELDS) updates[f] = stats[f];
     return store.set('stats', Object.assign({}, rawStats(), updates, { v: SAVE_V }));
   }
   function rewardsFor(id) {
@@ -364,6 +369,7 @@
   window.__tt.albumImgs = function () { return albumImgs(album.list.map(function (e) { return e.id; })).then(function (o) { return album.list.map(function (e) { return o[e.id] || null; }); }); };
   window.__tt.albumInfo = function () { return albumRun(function () { return albumInfo(); }); };
   window.__tt.albumClear = function () { return albumClear(); };
+  window.__tt.albumTricks = function () { return albumRun(function () { return albumTricks(); }); };
   window.__tt.goals = function () { var st = getStats(); return GOALS.map(function (g) { return { id: g.id, tier: g.tier, done: achieved(g.id, st), p: g.progress(st), rewards: rewardsFor(g.id).map(function (r) { return r.name; }) }; }); };
   window.__tt.pendingSnaps = function () { return G.pendingSnaps.length; };
   window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
@@ -1204,7 +1210,8 @@
     var after = Object.assign({}, before, { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
       l5acc80: before.l5acc80 || (lv.id === 5 && enough && acc >= 80), l5bestAcc: lv.id === 5 && enough ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc,
       levelsDone: done, bestAcc: enough ? Math.max(before.bestAcc, acc) : before.bestAcc, l5perfect: before.l5perfect || (lv.id === 5 && enough && acc === 100),
-      best3: getBest(3), streakL3: lv.id >= 3 ? Math.max(before.streakL3, G.topStreak) : before.streakL3 });
+      best3: getBest(3), streakL3: lv.id >= 3 ? Math.max(before.streakL3, G.topStreak) : before.streakL3,
+      streakL12: lv.id <= 2 ? Math.max(before.streakL12, G.topStreak) : before.streakL12 });
     saveStats(after);
     $('#eCoins').textContent = '+' + earned;
     var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak bonus'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
@@ -1471,7 +1478,7 @@
       tabs.appendChild(b);
     });
     var cat = GEAR_CATS.filter(function (x) { return x.id === shopCat; })[0];
-    $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name + (rideUnlocked(riderById(cat.rider)) ? '.' : ' (ride unlocks with a goal, see GOALS; gear can be bought now).') : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
+    $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name + (rideUnlocked(riderById(cat.rider)) ? '.' : '. Unlock the ' + riderById(cat.rider).name + ' to buy its gear (see GOALS).') : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
     var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = []; shopDirty = true;
     var stats = getStats(), coins = getCoins();
     GEAR.filter(function (it) { return it.cat === shopCat; }).forEach(function (it) {
@@ -1738,6 +1745,17 @@
     G.pendingSnaps.forEach(function (q) { if (q.r.id === r.id && q.performed) has[q.performed.id] = 1; });
     return collectible(r).filter(function (t) { return !has[t.id]; });
   }
+  // Album progress: distinct collectible tricks collected, out of every ride's collectible tricks (16 today: 5 skateboard,
+  // 5 scooter, 6 BMX). Old Ollie / Bunny Hop cards, duplicate cards and unknown rides/tricks don't count.
+  function albumTricks() {
+    var total = 0, got = {}, n = 0;
+    RIDERS.forEach(function (r) { total += collectible(r).length; });
+    album.list.forEach(function (e) {
+      var r = RIDERS.filter(function (x) { return x.id === e.rider; })[0], k = e.rider + ':' + e.trick;
+      if (r && !got[k] && collectible(r).some(function (t) { return t.id === e.trick; })) { got[k] = 1; n++; }
+    });
+    return { n: n, total: total };
+  }
   function albumFull() { return album.list.length + G.pendingSnaps.length >= ALBUM_CAP; }
   // Runs on every correct answer. At a snapshot streak the card shows the trick just landed, but only if that trick is
   // new to this ride's album. If not, the capture is held and taken on the next landed trick that is new, in the same
@@ -1857,7 +1875,7 @@
     var a = album.list.slice().reverse(), grid = $('#albumGrid'), token = ++albumBuildN, ims = {}; grid.innerHTML = '';
     var full = a.length >= ALBUM_CAP || (album.fullHit && a.length > 0);
     $('#albumSub').textContent = full ? 'Album full (' + a.length + ' of ' + ALBUM_CAP + ') \u00b7 delete a card to make room for new ones'
-      : a.length ? a.length + ' of ' + ALBUM_CAP + ' snapshots · newest first' : '';
+      : a.length ? (function (c) { return c.n + ' of ' + c.total + ' tricks collected · newest first'; })(albumTricks()) : '';
     $('#albumSub').classList.toggle('full', full);
     $('#albumEmpty').classList.toggle('hidden', a.length > 0);
     a.forEach(function (e) {

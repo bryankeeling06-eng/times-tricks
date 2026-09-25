@@ -44,6 +44,8 @@ In-game coins only. No real money, no purchases, no accounts, nothing leaves the
 
 The Big streak goal used to be "Hit a 30-streak". Its progress now counts only the best streak on Levels 3–5 (`streakL3`), tracked from this version on, because older saves don't record which level a best streak was on (a stored best of 20+ is not granted automatically). A kid whose save already had a 30-streak keeps the goal and its rewards (stamped once as `old30`).
 
+The Medium streak goal used to be "Hit a 20-streak" on any level, so a 20-streak on Level 3+ unlocked it in the same round as the Big goal. Since v12 it counts only the best streak on Levels 1–2 (`streakL12`), tracked from v12 on (older bests are not credited). A save that had already earned it (best streak 20+) keeps the goal and the Gold Jersey (stamped once as `old20`).
+
 | Tier | Goal | Reward |
 |---|---|---|
 | Easy | Hit your first 5-streak | Sky Tee (shirt, 30) |
@@ -55,7 +57,7 @@ The Big streak goal used to be "Hit a 30-streak". Its progress now counts only t
 | Medium | Finish a round on every level (1–5) | Flame Wheels board (170) |
 | Medium | Hit a 15-streak | **BMX** ride |
 | Medium | Land 25 grinds | Neon Bars scooter (180) |
-| Medium | Hit a 20-streak | Gold Jersey |
+| Medium | Hit a 20-streak on Level 1 or 2 | Gold Jersey |
 | Medium | Level 5 round with 80%+ accuracy (8+ answers) | Gold Rush scooter |
 | Medium | Score 6,000+ on Level 3 | Chrome Dome helmet |
 | Big | Hit a 20-streak on Level 3 or higher (Levels 3–5) | Holo Deck (board, 300), Holo Frame (BMX, 300) |
@@ -86,6 +88,7 @@ Everything is data in `game.js`:
 - Hitting a **5, 10, 15 or 20 streak** in a round can take a snapshot (rules below): a 600×800 photo card of the rider in their equipped gear, frozen at the peak of a trick, with a STREAK badge, trick name, date and level. A small "📸 Snapshot saved!" toast shows and play carries on.
 - The card shows **the trick the kid actually landed**, and each ride's album collects each trick once. At a snapshot streak the card is only taken if the landed trick is new to that ride's album. If it isn't, the snapshot waits and is taken on the next landed trick that is new, in the same streak run (a wrong answer or the end of the round cancels it). Once a ride's album has every trick, its milestones are skipped quietly (no card, no toast). The "Snapshot saved!" toast only shows when a card is really taken.
 - Collectible tricks per ride are the tricks and grinds you can land at a 3+ streak (skateboard and scooter: 3 tricks + 2 grinds = 5; BMX: 4 tricks + 2 grinds = 6). The base trick (Ollie / Bunny Hop) is only done below a 3-streak, so it's left out of the set; old Ollie / Bunny Hop cards already in an album are kept.
+- The album header shows **tricks collected out of all collectible tricks** (e.g. "10 of 16 tricks collected"; 16 = 5 skateboard + 5 scooter + 6 BMX, computed from the trick lists). Each ride's trick counts once, so duplicate cards and old Ollie / Bunny Hop cards don't add to it. Long trick names wrap under the card.
 - Cards are drawn and saved after the round ends (never during play), so a card earned mid-round is also kept if the round is quit.
 - **ALBUM** on the start screen shows the grid. Tap a card to open it full screen, then **Save to Photos** (opens the iOS/Android share sheet with the image, where "Save Image" puts it in Photos; on desktop it downloads) or **Delete** (tap twice). Press-and-hold on the picture also works on iPhone.
 - **Storage:** card images (JPEG, ~45 KB each) are in **IndexedDB** (database `times-tricks`, stores `meta` + `img`). localStorage only keeps a small metadata copy (`tt_album_meta`) so the album count shows instantly. Albums from v7 and older (whole cards in `tt_album` in localStorage) are moved into IndexedDB once on startup, verified, and only then removed from localStorage. Without IndexedDB the album falls back to `tt_album` in localStorage, kept under a ~900 KB budget.
@@ -94,7 +97,7 @@ Everything is data in `game.js`:
 ## Saved in the browser (localStorage, `tt_` prefix)
 
 - Chosen rider (`tt_rider`), place (`tt_place`), level, and answer mode (a locked or unknown saved rider/place falls back to Skateboard / Sunset Street)
-- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), goal stats (`tt_stats`: best streak, best streak on Levels 3–5, grinds, rounds, levels finished, best accuracy, Level 5 results; older saves are migrated, with levels finished rebuilt from personal bests), snapshot album metadata (`tt_album_meta`; the images are in IndexedDB, see Snapshot album)
+- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), goal stats (`tt_stats`: best streak, best streak on Levels 1–2 and on Levels 3–5, grinds, rounds, levels finished, best accuracy, Level 5 results; older saves are migrated, with levels finished rebuilt from personal bests), snapshot album metadata (`tt_album_meta`; the images are in IndexedDB, see Snapshot album)
 - Personal best per level (`tt_best_<level>`)
 - Missed facts (`tt_missed`): missed facts come back more often in later rounds until you get them right a few times. The end screen lists them under "Facts to practice".
 
