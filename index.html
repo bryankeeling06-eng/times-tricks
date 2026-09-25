@@ -10,7 +10,7 @@
 <title>Times Tricks — Multiplication Street Runner</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<link rel="stylesheet" href="style.css?v=4" />
+<link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
 <div id="app">
@@ -24,6 +24,7 @@
 
   <section id="scene">
     <canvas id="cv"></canvas>
+    <div id="snapToast" class="snapToast">📸 Snapshot saved!</div>
     <div id="banner"><div id="prompt">&nbsp;</div><div id="gateBar"><i></i></div></div>
   </section>
 
@@ -53,7 +54,8 @@
       <div id="riderPick" class="riders"></div>
       <div class="coinRow">
         <div class="coinPill"><i class="coin"></i><b id="coinTotal">0</b><small>coins</small></div>
-        <button id="shopBtn" class="shopBtn">GEAR SHOP ▸</button>
+        <button id="shopBtn" class="shopBtn">GEAR SHOP</button>
+        <button id="albumBtn" class="shopBtn albumBtn">ALBUM <span id="albumCount" class="cnt hidden">0</span></button>
       </div>
 
       <h2>Level</h2>
@@ -117,11 +119,36 @@
     </div>
   </div>
 
+  <!-- Snapshot album (stored only on this device) -->
+  <div id="album" class="overlay">
+    <div class="panel shopPanel">
+      <div class="shopHead">
+        <h2 class="endTitle">ALBUM</h2>
+        <button id="albumClose" class="hbtn" aria-label="Close album">✕</button>
+      </div>
+      <p id="albumSub" class="note shopHint"></p>
+      <p id="albumEmpty" class="note albumEmpty">No snapshots yet. Hit a <b>5 streak</b> in a round and your rider's best trick gets photographed here. Another at 10, 15 and 20!</p>
+      <div id="albumGrid" class="albumGrid"></div>
+      <button id="albumBack" class="big alt">BACK</button>
+    </div>
+  </div>
+  <div id="viewer" class="overlay viewer">
+    <div class="viewWrap">
+      <img id="viewImg" alt="Snapshot" />
+      <p id="viewCap" class="viewCap"></p>
+      <div class="viewBtns">
+        <button id="saveSnap" class="big">SAVE TO PHOTOS</button>
+        <div class="viewRow"><button id="delSnap" class="big alt del">DELETE</button><button id="viewBack" class="big alt">BACK</button></div>
+      </div>
+      <p id="saveHint" class="note"></p>
+    </div>
+  </div>
+
   <!-- Pause -->
   <div id="pause" class="overlay">
     <div class="panel small"><h2 class="endTitle">PAUSED</h2><button id="resumeBtn" class="big">RESUME ▶</button></div>
   </div>
 </div>
-<script src="game.js?v=4"></script>
+<script src="game.js?v=5"></script>
 </body>
 </html>

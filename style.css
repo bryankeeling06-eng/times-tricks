@@ -169,3 +169,29 @@ h2{font-size:12px;letter-spacing:.16em;color:var(--muted);margin:14px 0 6px;text
 .ibtn.buy:disabled{background:#3a2a5e;color:#8f80ad;box-shadow:none}
 .ibtn.equip{background:linear-gradient(#26d4b4,#12a08c);color:#062a26;box-shadow:0 3px 0 #0a5f53}
 .ibtn:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+
+/* Snapshot album */
+.snapToast{position:absolute;left:50%;bottom:14px;transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  background:rgba(21,12,38,.9);border:2px solid var(--gold);color:#fff;font-weight:900;font-size:15px;padding:7px 14px;border-radius:999px;
+  transition:opacity .2s,transform .2s;white-space:nowrap}
+.snapToast.show{opacity:1;transform:translate(-50%,0)}
+.albumBtn{flex:0 0 auto;padding:10px 12px;background:linear-gradient(#8ff5ee,#19c3c0);box-shadow:0 4px 0 #0a5f53;color:#062a26;display:flex;align-items:center;gap:6px}
+.albumBtn:active{box-shadow:0 1px 0 #0a5f53}
+.cnt{background:#062a26;color:#8ff5ee;border-radius:999px;font-size:12px;padding:1px 7px}
+.coinRow .shopBtn{font-size:15px}
+.albumGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.snap{border:2px solid #3a2a5e;background:var(--panel2);border-radius:14px;padding:5px;display:flex;flex-direction:column;gap:4px}
+.snap img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:9px;display:block}
+.snap span{font-size:12px;font-weight:900;color:var(--gold);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.albumEmpty{font-size:15px;line-height:1.45;padding:18px 6px}
+.viewer{z-index:30;background:rgba(10,5,20,.96);align-items:center}
+.viewWrap{width:100%;max-width:440px;margin:auto 0;display:flex;flex-direction:column;align-items:center}
+#viewImg{width:auto;max-width:100%;max-height:calc(100dvh - 250px);border-radius:16px;display:block;box-shadow:0 12px 40px rgba(0,0,0,.6);
+  -webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+.viewCap{color:var(--muted);font-weight:700;font-size:13px;text-align:center;margin:8px 0 0}
+.viewBtns{width:100%}
+.viewBtns .big{margin-top:10px}
+.viewRow{display:flex;gap:10px}
+.viewRow .big{flex:1}
+.big.del{background:#4a1d33;box-shadow:0 5px 0 #2a0f1d;color:#ffb3c6}
+.big.del.armed{background:#c7283a;color:#fff}

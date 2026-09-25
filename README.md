@@ -53,10 +53,17 @@ Everything is data in `game.js`:
 - **New category:** add to `GEAR_CATS`. A category with `rider: '<id>'` applies to that ride; set `gearCat` on the rider.
 - **Coin tuning:** the `COINS` object.
 
+## Snapshot album
+
+- Hitting a **5, 10, 15 or 20 streak** in a round takes a snapshot: a 600×800 photo card of the rider in their equipped gear, frozen at the peak of a trick, with a STREAK badge, trick name, date and level. A small "📸 Snapshot saved!" toast shows and play carries on.
+- The trick on the card is always one that isn't in the album yet for that ride (4 tricks + 2 grinds each). Once all six are used it only avoids repeating the most recent one.
+- **ALBUM** on the start screen shows the grid. Tap a card to open it full screen, then **Save to Photos** (opens the iOS/Android share sheet with the image, where "Save Image" puts it in Photos; on desktop it downloads) or **Delete** (tap twice). Press-and-hold on the picture also works on iPhone.
+- Cards are JPEG data URLs (~45 KB each) in `tt_album`, capped at 30 (oldest dropped, and also dropped if storage is full). Nothing is uploaded. Tune with `SNAP_STREAKS`, `ALBUM_CAP` and `SNAP_Q` in `game.js`.
+
 ## Saved in the browser (localStorage, `tt_` prefix)
 
 - Chosen rider, level, and answer mode
-- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), milestone stats (`tt_stats`)
+- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), milestone stats (`tt_stats`), snapshot album (`tt_album`)
 - Personal best per level (`tt_best_<level>`)
 - Missed facts (`tt_missed`): missed facts come back more often in later rounds until you get them right a few times. The end screen lists them under "Facts to practice".
 

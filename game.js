@@ -241,6 +241,8 @@
   };
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
+  window.__tt.snap = function (streak) { return takeSnapshot(streak || 5, G.trick); };
+  window.__tt.album = function () { return getAlbum().map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, kb: Math.round(e.img.length * 0.75 / 1024) }; }); };
   window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
 
   function level() { return LEVELS[settings.level - 1]; }
@@ -578,10 +580,11 @@
     }
     return pose;
   }
-  function drawRail(rx) {
-    var a = rx + (G.railL - G.grindTrav), b = rx + (G.railR - G.grindTrav), y = GROUND_Y - GRIND.railH;
+  function drawRail(rx) { drawRailAt(rx + (G.railL - G.grindTrav), rx + (G.railR - G.grindTrav), clamp(G.trickT / 0.08, 0, 1)); }
+  function drawRailAt(a, b, alpha) {
+    var y = GROUND_Y - GRIND.railH;
     if (b < -20 || a > VW + 20) return;
-    ctx.save(); ctx.globalAlpha = clamp(G.trickT / 0.08, 0, 1);
+    ctx.save(); ctx.globalAlpha = alpha;
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(a, GROUND_Y - 2, b - a, 3);
     ctx.fillStyle = '#1a1030';
     var n = Math.max(2, Math.round((b - a) / 55));
@@ -666,6 +669,7 @@
     G.coinParts.answers += COINS.perCorrect; G.coinParts.streak += (m - 1) * COINS.perMultStep;
     G.gateState = 'good'; G.boostSpeed = Math.max(G.speed, G.gateDist / 0.38);
     if (G.trick.grind) startGrind();
+    if (SNAP_STREAKS.indexOf(G.streak) >= 0) { var snapStreak = G.streak, perf = G.trick; setTimeout(function () { takeSnapshot(snapStreak, perf); }, 60); }
     el.banner.className = 'right'; flashDisplay('flashR');
     if (settings.mode === 'choices') el.choices.forEach(function (b) { if (Number(b.textContent) === p.answer) b.classList.add('good'); });
     pop('+' + pts + '  ' + G.trick.name, '#ffc94d');
@@ -826,6 +830,7 @@
   document.addEventListener('keydown', function (e) {
     if (G.screen === 'expired') return;
     if (G.screen === 'shop') { if (e.key === 'Escape') closeShop(); return; }
+    if (G.screen === 'album') { if (e.key === 'Escape') { if (viewing) closeViewer(); else closeAlbum(); } return; }
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen !== 'play') return;
@@ -882,7 +887,7 @@
       b.classList.toggle('sel', id === settings.level); b.querySelector('.b').textContent = best ? 'BEST ' + best : '';
     });
     $$('#modePick button').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-mode') === settings.mode); });
-    $('#coinTotal').textContent = getCoins();
+    $('#coinTotal').textContent = getCoins(); refreshAlbumCount();
     var m = getMissed(), n = Object.keys(m).filter(function (k) { return level().fits(m[k]); }).length;
     $('#practiceNote').textContent = n ? n + ' tricky fact' + (n > 1 ? 's' : '') + ' saved for this level — they’ll show up more often.' : 'Missed facts get saved and come back more often until you nail them.';
   }
@@ -965,6 +970,151 @@
   $('#shopBack').addEventListener('click', closeShop);
   $('#shopClose').addEventListener('click', closeShop);
 
+
+  // ---------- snapshot album ----------
+  // At streaks in SNAP_STREAKS a photo card of the rider (equipped gear, frozen mid-trick) is drawn on an
+  // offscreen canvas, saved as a JPEG data URL in localStorage (tt_album, max ALBUM_CAP, oldest dropped).
+  // The trick on the card is always one not yet in the album for that ride; once all are used,
+  // it just avoids repeating the most recent one. Nothing is uploaded anywhere.
+  var SNAP_STREAKS = [5, 10, 15, 20], ALBUM_CAP = 30, SNAP_W = 600, SNAP_H = 800, SNAP_Q = 0.72;
+  function getAlbum() { try { var a = JSON.parse(localStorage.getItem('tt_album') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function saveAlbum(a) {
+    while (a.length > ALBUM_CAP) a.shift();
+    for (;;) {
+      try { localStorage.setItem('tt_album', JSON.stringify(a)); return true; }
+      catch (e) { if (a.length <= 1) return false; a.shift(); }   // storage full: drop oldest and retry
+    }
+  }
+  function rideTricks(r) { return r.tricks.concat(r.grinds || []); }
+  function chooseSnapTrick(r, performed, album) {
+    var all = rideTricks(r), mine = album.filter(function (e) { return e.rider === r.id; });
+    var used = mine.map(function (e) { return e.trick; });
+    var opts = all.filter(function (t) { return used.indexOf(t.id) < 0; });
+    if (!opts.length) { var lastId = mine.length ? mine[mine.length - 1].trick : null; opts = all.filter(function (t) { return t.id !== lastId; }); }
+    for (var i = 0; i < opts.length; i++) if (performed && opts[i].id === performed.id) return opts[i];
+    return pick(opts);
+  }
+  function peakPose(trick) { return trick.grind ? grindPose(trick, 0.46) : trickPose(trick.id, trick.id === 'ollie' || trick.id === 'hop' ? 0.42 : 0.5); }
+  function fmtDate(ms) { try { return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { var d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); } }
+  function renderSnapCard(dressedRider, trick, entry) {
+    var W = SNAP_W, H = SNAP_H, cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
+    var x = cnv.getContext('2d');
+    var saved = { ctx: ctx, VW: VW, TOP: TOP, wx: G.worldX, parts: G.particles };
+    var LVW = 260, k = W / LVW, LVH = H / k, rx = LVW * 0.5;
+    try {
+      ctx = x; VW = LVW; TOP = 400 - LVH; G.worldX = 400 + Math.random() * 2600; G.particles = [];
+      x.setTransform(k, 0, 0, k, 0, -TOP * k);
+      drawSky(entry.t / 1000);
+      drawCity(farCity, 0.08, GROUND_Y - 10, '#3d1d52', 'rgba(255,190,120,0.35)', 0);
+      drawCity(nearCity, 0.25, GROUND_Y - 4, '#26143a', 'rgba(255,210,130,0.55)', 300);
+      drawProps(); drawLamps(); drawGround();
+      // motion streaks
+      x.strokeStyle = 'rgba(255,255,255,0.28)'; x.lineWidth = 1.6; x.lineCap = 'round';
+      for (var i = 0; i < 6; i++) { var ly = GROUND_Y - 40 - i * 16, lx = rx - 70 - (i % 3) * 18; x.beginPath(); x.moveTo(lx, ly); x.lineTo(lx - 40 - (i % 2) * 20, ly); x.stroke(); }
+      if (trick.grind) {
+        drawRailAt(rx - 100, rx + 100, 1);
+        x.fillStyle = '#ffe28a';
+        for (var s = 0; s < 18; s++) { var sx = rx - 14 - Math.random() * 40, sy = GROUND_Y - GRIND.railH - Math.random() * 14; x.fillRect(sx, sy, 1.6, 1.6); }
+      }
+      drawRider(x, rx, GROUND_Y, RIDER_SCALE * 1.05, dressedRider, peakPose(trick));
+    } finally { ctx = saved.ctx; VW = saved.VW; TOP = saved.TOP; G.worldX = saved.wx; G.particles = saved.parts; }
+    // overlays in pixel space
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    var tg = x.createLinearGradient(0, 0, 0, 200); tg.addColorStop(0, 'rgba(20,10,38,0.75)'); tg.addColorStop(1, 'rgba(20,10,38,0)'); x.fillStyle = tg; x.fillRect(0, 0, W, 200);
+    var bg = x.createLinearGradient(0, H - 190, 0, H); bg.addColorStop(0, 'rgba(20,10,38,0)'); bg.addColorStop(0.45, 'rgba(20,10,38,0.8)'); bg.addColorStop(1, 'rgba(20,10,38,0.95)'); x.fillStyle = bg; x.fillRect(0, H - 190, W, 190);
+    // streak badge
+    var bgrad = x.createLinearGradient(0, 28, 0, 100); bgrad.addColorStop(0, '#ffb35c'); bgrad.addColorStop(1, '#ff4f8b');
+    x.save(); x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = 14; x.shadowOffsetY = 4;
+    roundRectC(x, 28, 28, 300, 74, 18); x.fillStyle = bgrad; x.fill(); x.restore();
+    x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,0.8)'; roundRectC(x, 28, 28, 300, 74, 18); x.stroke();
+    x.fillStyle = '#fff'; x.font = 'italic 900 46px ' + fontFam; x.textBaseline = 'middle'; x.textAlign = 'center';
+    x.fillText('STREAK ' + entry.streak, 178, 67);
+    // trick name
+    x.textAlign = 'left'; x.font = 'italic 900 50px ' + fontFam; x.lineWidth = 8; x.strokeStyle = '#1a1030'; x.lineJoin = 'round';
+    var tn = trick.name; while (x.measureText(tn).width > W - 60 && parseInt(x.font.match(/(\d+)px/)[1], 10) > 26) x.font = 'italic 900 ' + (parseInt(x.font.match(/(\d+)px/)[1], 10) - 4) + 'px ' + fontFam;
+    x.strokeText(tn, 30, 150); x.fillStyle = '#ffc94d'; x.fillText(tn, 30, 150);
+    // footer
+    var lg = x.createLinearGradient(0, H - 110, 0, H - 70); lg.addColorStop(0, '#ffe08a'); lg.addColorStop(1, '#ff7a3d');
+    x.font = 'italic 900 34px ' + fontFam; x.fillStyle = lg; x.fillText('TIMES', 30, H - 92);
+    var w1 = x.measureText('TIMES ').width, lg2 = x.createLinearGradient(0, H - 110, 0, H - 70); lg2.addColorStop(0, '#8ff5ee'); lg2.addColorStop(1, '#19c3c0');
+    x.fillStyle = lg2; x.fillText('TRICKS', 30 + w1, H - 92);
+    x.font = '700 22px ' + fontFam; x.fillStyle = '#e6dcf7';
+    x.fillText(fmtDate(entry.t) + '  ·  Level ' + entry.level + ': ' + entry.levelName, 30, H - 52);
+    x.textAlign = 'right'; x.font = '800 20px ' + fontFam; x.fillStyle = '#b9a8d8'; x.fillText(dressedRider.name.toUpperCase(), W - 30, H - 92);
+    // frame
+    x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,0.35)'; roundRectC(x, 10, 10, W - 20, H - 20, 22); x.stroke();
+    return cnv.toDataURL('image/jpeg', SNAP_Q);
+  }
+  function takeSnapshot(streak, performed) {
+    var r = rider(), album = getAlbum(), trick = chooseSnapTrick(r, performed, album), now = Date.now();
+    var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: settings.level, levelName: level().name };
+    try { entry.img = renderSnapCard(dress(r), trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
+    album.push(entry);
+    if (!saveAlbum(album)) return null;
+    showSnapToast(); refreshAlbumCount();
+    return entry;
+  }
+  var toastTimer = null;
+  function showSnapToast() {
+    var t = $('#snapToast'); t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+  function refreshAlbumCount() { var n = getAlbum().length; $('#albumCount').textContent = n; $('#albumCount').classList.toggle('hidden', !n); }
+
+  // album screens
+  function openAlbum() {
+    if (pilotExpired()) { showPilotEnded(); return; }
+    G.screen = 'album'; el.menu.classList.remove('show'); $('#album').classList.add('show'); buildAlbum();
+  }
+  function closeAlbum() { closeViewer(); $('#album').classList.remove('show'); toMenu(); }
+  function buildAlbum() {
+    var a = getAlbum().slice().reverse(), grid = $('#albumGrid'); grid.innerHTML = '';
+    $('#albumSub').textContent = a.length ? a.length + ' of ' + ALBUM_CAP + ' snapshots · newest first' : '';
+    $('#albumEmpty').classList.toggle('hidden', a.length > 0);
+    a.forEach(function (e) {
+      var b = document.createElement('button'); b.className = 'snap'; b.setAttribute('data-id', e.id);
+      var im = document.createElement('img'); im.src = e.img; im.alt = 'Streak ' + e.streak + ' ' + e.trickName; b.appendChild(im);
+      var cap = document.createElement('span'); cap.textContent = 'STREAK ' + e.streak + ' · ' + e.trickName; b.appendChild(cap);
+      b.addEventListener('click', function () { openViewer(e.id); });
+      grid.appendChild(b);
+    });
+  }
+  var viewing = null, delArmed = false, delTimer = null;
+  function openViewer(id) {
+    var e = getAlbum().filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    viewing = e; delArmed = false; $('#delSnap').textContent = 'DELETE'; $('#delSnap').classList.remove('armed');
+    $('#viewImg').src = e.img;
+    $('#viewCap').textContent = 'Streak ' + e.streak + ' · ' + e.trickName + ' · ' + fmtDate(e.t) + ' · Level ' + e.level;
+    $('#saveHint').textContent = 'Tip: you can also press and hold the picture to save it.';
+    $('#viewer').classList.add('show');
+  }
+  function closeViewer() { $('#viewer').classList.remove('show'); viewing = null; }
+  function dataURLtoBlob(u) { var p = u.split(','), bin = atob(p[1]), arr = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: 'image/jpeg' }); }
+  function saveViewing() {
+    if (!viewing) return;
+    var name = 'times-tricks-streak' + viewing.streak + '-' + viewing.trick + '.jpg', file = null;
+    try { file = new File([dataURLtoBlob(viewing.img)], name, { type: 'image/jpeg' }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Times Tricks snapshot' }).catch(function () {});  // share sheet → "Save Image"
+      return;
+    }
+    var a = document.createElement('a'); a.href = viewing.img; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) $('#saveHint').textContent = 'Press and hold the picture, then tap “Save to Photos”.';
+    else $('#saveHint').textContent = 'Saved to your downloads.';
+  }
+  function deleteViewing() {
+    if (!viewing) return;
+    if (!delArmed) { delArmed = true; $('#delSnap').textContent = 'TAP AGAIN TO DELETE'; $('#delSnap').classList.add('armed'); clearTimeout(delTimer); delTimer = setTimeout(function () { delArmed = false; $('#delSnap').textContent = 'DELETE'; $('#delSnap').classList.remove('armed'); }, 3000); return; }
+    var id = viewing.id; saveAlbum(getAlbum().filter(function (x) { return x.id !== id; }));
+    closeViewer(); buildAlbum(); refreshAlbumCount();
+  }
+  $('#albumBtn').addEventListener('click', openAlbum);
+  $('#albumBack').addEventListener('click', closeAlbum);
+  $('#albumClose').addEventListener('click', closeAlbum);
+  $('#viewBack').addEventListener('click', closeViewer);
+  $('#saveSnap').addEventListener('click', saveViewing);
+  $('#delSnap').addEventListener('click', deleteViewing);
+
   // ---------- loop ----------
   var last = performance.now();
   function frame(now) {
@@ -1000,7 +1150,7 @@
   function pilotExpired() { return !!pilot && Date.now() > pilot.until.ms; }
   function showPilotEnded() {
     G.screen = 'expired'; setPhase('idle');
-    [el.menu, el.end, el.pause, $('#shop')].forEach(function (o) { o.classList.remove('show'); });
+    [el.menu, el.end, el.pause, $('#shop'), $('#album'), $('#viewer')].forEach(function (o) { o.classList.remove('show'); });
     el.banner.className = 'hide'; $('#pilotEnded').classList.add('show');
   }
   function pilotLabel() {
