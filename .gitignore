@@ -1,0 +1,19 @@
+# Planning / idea notes: keep these local, never publish them
+IDEAS*.md
+PLAN*.md
+NOTES*.md
+TODO*.md
+*.draft.md
+*-planning/
+planning/
+notes/
+
+# OS / editor junk
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/

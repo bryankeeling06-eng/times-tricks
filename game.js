@@ -3,10 +3,23 @@
   'use strict';
 
   // ---------- storage ----------
+  // All small saves go through store. set() returns true only if the write stuck (a full quota,
+  // Safari private mode etc. return false instead of throwing).
+  var SAVE_V = 2;   // save schema version. Saves from v7 and older have no stamp (= version 1).
   var store = {
     get: function (k, d) { try { var v = localStorage.getItem('tt_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set: function (k, v) { try { localStorage.setItem('tt_' + k, JSON.stringify(v)); } catch (e) {} }
+    set: function (k, v) { try { localStorage.setItem('tt_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+    remove: function (k) { try { localStorage.removeItem('tt_' + k); return true; } catch (e) { return false; } }
   };
+  // Type-checked loaders: a missing, corrupt or wrong-type saved value falls back to the default.
+  function obj(v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function num(v, d) { if (typeof v === 'string' && v.trim() !== '') v = Number(v); return typeof v === 'number' && isFinite(v) ? v : d; }
+  function str(v, d) { return typeof v === 'string' ? v : d; }
+  // A save written by a NEWER version of the game: read what we understand, but never write gear/stats back
+  // (that would throw away whatever the newer version added).
+  var saveTooNew = num(store.get('save_v', 0), 0) > SAVE_V || num(obj(store.get('stats', null)).v, 0) > SAVE_V || num(obj(store.get('gear', null)).v, 0) > SAVE_V;
+  if (!saveTooNew) store.set('save_v', SAVE_V);
 
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
@@ -170,11 +183,27 @@
     { id: 'p_night', tier: 'big', text: 'Land 50 grinds', label: 'Grinds', progress: function (s) { return upTo(s.grinds, 50); } }
   ];
   var ACHIEVEMENTS = {}; GOALS.forEach(function (g) { ACHIEVEMENTS[g.id] = g; });
+  // Saved stats (tt_stats). This is the ONLY list of stat fields: getStats() reads them (typed) and saveStats()
+  // writes them merged over the raw save, so fields this version doesn't know about survive.
+  var STAT_FIELDS = { bestStreak: 'num', grinds: 'num', rounds: 'num', bestAcc: 'num', l5bestAcc: 'num', l5acc80: 'bool', l5perfect: 'bool', levelsDone: 'levels' };
+  function rawStats() { return obj(store.get('stats', {})); }
+  function getBest(id) { return Math.max(0, num(store.get('best_' + id, 0), 0)); }
+  function readStat(type, v) {
+    if (type === 'bool') return v === true;
+    if (type === 'levels') { var out = []; arr(v).forEach(function (L) { L = num(L, 0); if (L >= 1 && L <= LEVELS.length && L === Math.floor(L) && out.indexOf(L) < 0) out.push(L); }); return out; }
+    return Math.max(0, num(v, 0));
+  }
   function getStats() {
-    var s = store.get('stats', {}) || {}, done = Array.isArray(s.levelsDone) ? s.levelsDone.slice() : [];
-    for (var L = 1; L <= 5; L++) if (store.get('best_' + L, 0) > 0 && done.indexOf(L) < 0) done.push(L);   // migrate older saves
-    return { bestStreak: s.bestStreak || 0, grinds: s.grinds || 0, l5acc80: !!s.l5acc80, l5bestAcc: s.l5bestAcc || 0, rounds: s.rounds || 0,
-      levelsDone: done, bestAcc: s.bestAcc || 0, l5perfect: !!s.l5perfect, best3: store.get('best_3', 0) };
+    var s = rawStats(), out = {};
+    for (var f in STAT_FIELDS) out[f] = readStat(STAT_FIELDS[f], s[f]);
+    for (var L = 1; L <= 5; L++) if (getBest(L) > 0 && out.levelsDone.indexOf(L) < 0) out.levelsDone.push(L);   // migrate older saves
+    out.best3 = getBest(3);
+    return out;
+  }
+  function saveStats(stats) {
+    if (saveTooNew) return false;
+    var updates = {}; for (var f in STAT_FIELDS) updates[f] = stats[f];
+    return store.set('stats', Object.assign({}, rawStats(), updates, { v: SAVE_V }));
   }
   function rewardsFor(id) {
     var out = [];
@@ -190,18 +219,25 @@
 
   // Coins
   var COINS = { perCorrect: 2, perMultStep: 1, grind: 3, accuracyBonus: 5, accuracyMin: 80, accuracyMinAnswers: 8, bestBonus: 10 };
-  function getCoins() { return Math.max(0, store.get('coins', 0) | 0); }
-  function setCoins(v) { store.set('coins', Math.max(0, v | 0)); }
+  function getCoins() { return Math.max(0, Math.floor(num(store.get('coins', 0), 0))); }
+  function setCoins(v) { return store.set('coins', Math.max(0, Math.floor(num(v, 0)))); }
 
-  // Owned / equipped
+  // Owned / equipped. The saved data keeps ids this version doesn't know (items or categories from a newer
+  // version); they're only filtered where they're used, and written back untouched.
   var gear = (function () {
-    var g = store.get('gear', null) || {}, owned = Array.isArray(g.owned) ? g.owned.filter(function (id) { return GEAR_BY_ID[id]; }) : [];
+    var g = obj(store.get('gear', null)), owned = [];
+    arr(g.owned).forEach(function (id) { if (typeof id === 'string' && owned.indexOf(id) < 0) owned.push(id); });
     GEAR.forEach(function (it) { if (it.price === 0 && owned.indexOf(it.id) < 0) owned.push(it.id); });
-    var eq = g.equipped || {};
-    GEAR_CATS.forEach(function (c) { var it = GEAR_BY_ID[eq[c.id]]; if (!it || it.cat !== c.id || owned.indexOf(it.id) < 0) eq[c.id] = catDefault(c.id).id; });
-    return { owned: owned, equipped: eq };
+    var saved = obj(g.equipped), eq = {}, keep = {};
+    for (var k in saved) if (typeof saved[k] === 'string' && !GEAR_BY_ID[saved[k]]) keep[k] = saved[k];
+    GEAR_CATS.forEach(function (c) { var it = GEAR_BY_ID[saved[c.id]]; eq[c.id] = it && it.cat === c.id && owned.indexOf(it.id) >= 0 ? it.id : catDefault(c.id).id; });
+    return { owned: owned, equipped: eq, keepEq: keep };
   })();
-  function saveGear() { store.set('gear', gear); }
+  function saveGear() {
+    if (saveTooNew) return false;
+    var eq = Object.assign({}, gear.equipped, gear.keepEq);
+    return store.set('gear', Object.assign({}, obj(store.get('gear', null)), { owned: gear.owned, equipped: eq, v: SAVE_V }));
+  }
   function owns(id) { return gear.owned.indexOf(id) >= 0; }
 
   function lookFor(r, eq) {
@@ -256,7 +292,8 @@
   ];
 
   // ---------- missed-facts memory ----------
-  function getMissed() { return store.get('missed', {}); }
+  function validFact(f) { return !!f && typeof f === 'object' && (f.kind === 'm' || f.kind === 'd') && typeof f.a === 'number' && isFinite(f.a) && typeof f.b === 'number' && isFinite(f.b) && num(f.n, 0) > 0; }
+  function getMissed() { var m = obj(store.get('missed', {})), out = {}; Object.keys(m).forEach(function (k) { if (k !== '__proto__' && validFact(m[k])) out[k] = m[k]; }); return out; }
   function recordMiss(p) {
     var m = getMissed(); var e = m[p.key] || { kind: p.kind, a: p.kind === 'm' ? Math.min(p.a, p.b) : p.a, b: p.kind === 'm' ? Math.max(p.a, p.b) : p.b, n: 0 };
     e.n = Math.min(e.n + 2, 6); m[p.key] = e; store.set('missed', m);
@@ -292,11 +329,11 @@
 
   // ---------- state ----------
   var settings = {
-    rider: store.get('rider', 'skate'),
-    level: clamp(store.get('level', 1), 1, LEVELS.length),
+    rider: str(store.get('rider', 'skate'), 'skate'),
+    level: clamp(Math.round(num(store.get('level', 1), 1)), 1, LEVELS.length),
     mode: store.get('mode', 'pad') === 'choices' ? 'choices' : 'pad',
-    muted: !!store.get('muted', false),
-    place: store.get('place', 'street')
+    muted: store.get('muted', false) === true,
+    place: str(store.get('place', 'street'), 'street')
   };
   var G = {
     screen: 'menu', phase: 'idle', phaseT: 0, paused: false,
@@ -308,7 +345,10 @@
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
   window.__tt.snap = function (streak) { return takeSnapshot(streak || 5, G.trick); };
-  window.__tt.album = function () { return getAlbum().map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, place: e.place || "street", kb: Math.round(e.img.length * 0.75 / 1024) }; }); };
+  window.__tt.album = function () { return albumRun(function () { return album.list.map(function (e) { return { id: e.id, rider: e.rider, trick: e.trick, streak: e.streak, level: e.level, place: e.place || 'street', kb: e.kb }; }); }); };
+  window.__tt.albumImgs = function () { return albumImgs(album.list.map(function (e) { return e.id; })).then(function (o) { return album.list.map(function (e) { return o[e.id] || null; }); }); };
+  window.__tt.albumInfo = function () { return albumRun(function () { return albumInfo(); }); };
+  window.__tt.albumClear = function () { return albumClear(); };
   window.__tt.goals = function () { var st = getStats(); return GOALS.map(function (g) { return { id: g.id, tier: g.tier, done: achieved(g.id, st), p: g.progress(st), rewards: rewardsFor(g.id).map(function (r) { return r.name; }) }; }); };
   window.__tt.PLACES = PLACES;
   window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
@@ -320,7 +360,13 @@
 
   // ---------- audio (tiny WebAudio beeps, no files) ----------
   var actx = null;
-  function audio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (actx && actx.state === 'suspended') actx.resume(); return actx; }
+  function audio() {
+    if (actx && actx.state === 'closed') actx = null;
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    // iOS Safari reports 'interrupted' (not 'suspended') after an app switch or a call, so resume from any non-running state
+    if (actx && actx.state !== 'running') { try { var p = actx.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    return actx;
+  }
   function tone(freq, dur, type, vol, delay) {
     if (settings.muted) return; var a = audio(); if (!a) return;
     var t0 = a.currentTime + (delay || 0), o = a.createOscillator(), g = a.createGain();
@@ -1023,7 +1069,7 @@
   function endRound() {
     G.screen = 'end'; setPhase('idle');
     var before = getStats();
-    var lv = level(), bestKey = 'best_' + lv.id, best = store.get(bestKey, 0), isNew = G.score > best && G.score > 0;
+    var lv = level(), bestKey = 'best_' + lv.id, best = getBest(lv.id), isNew = G.score > best && G.score > 0;
     if (isNew) { best = G.score; store.set(bestKey, best); }
     var total = G.correct + G.wrong, acc = total ? Math.round(G.correct / total * 100) : 0;
     $('#eScore').textContent = G.score; $('#eBest').textContent = best; $('#eAcc').textContent = acc + '%'; $('#eStreak').textContent = G.topStreak;
@@ -1035,11 +1081,11 @@
     if (isNew) cp.bonus += COINS.bestBonus;
     var earned = cp.answers + cp.streak + cp.grinds + cp.bonus; setCoins(getCoins() + earned);
     var enough = total >= 8, done = before.levelsDone.slice(); if (done.indexOf(lv.id) < 0) done.push(lv.id);
-    var after = { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
+    var after = Object.assign({}, before, { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
       l5acc80: before.l5acc80 || (lv.id === 5 && enough && acc >= 80), l5bestAcc: lv.id === 5 && enough ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc,
       levelsDone: done, bestAcc: enough ? Math.max(before.bestAcc, acc) : before.bestAcc, l5perfect: before.l5perfect || (lv.id === 5 && enough && acc === 100),
-      best3: store.get('best_3', 0) };
-    var toSave = {}; for (var sk in after) if (sk !== 'best3') toSave[sk] = after[sk]; store.set('stats', toSave);
+      best3: getBest(3) });
+    saveStats(after);
     $('#eCoins').textContent = '+' + earned;
     var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
     $('#eCoinLine').textContent = (parts.length ? parts.join(' · ') + ' · ' : '') + 'total ' + getCoins();
@@ -1199,7 +1245,9 @@
     el.pause.classList.toggle('show', G.paused);
   }
   document.addEventListener('visibilitychange', function () { if (document.hidden) togglePause(true); });
-  $('#resumeBtn').addEventListener('click', function () { togglePause(false); });
+  $('#resumeBtn').addEventListener('click', function () { audio(); togglePause(false); });
+  // iOS only lets audio resume inside a gesture, and touch pointerdown doesn't count: retry on any touchend
+  document.addEventListener('touchend', function () { if (actx && actx.state !== 'running') audio(); }, { passive: true });
   $('#quitBtn').addEventListener('click', function () { if (G.screen === 'play') toMenu(); });
   $('#muteBtn').addEventListener('click', function () { settings.muted = !settings.muted; store.set('muted', settings.muted); $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊'; });
   $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊';
@@ -1234,7 +1282,7 @@
   function refreshMenu() {
     $$('.rider').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-id') === settings.rider); });
     $$('.lvl').forEach(function (b) {
-      var id = Number(b.getAttribute('data-level')), best = store.get('best_' + id, 0);
+      var id = Number(b.getAttribute('data-level')), best = getBest(id);
       b.classList.toggle('sel', id === settings.level); b.querySelector('.b').textContent = best ? 'BEST ' + best : '';
     });
     $$('#modePick button').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-mode') === settings.mode); });
@@ -1288,7 +1336,7 @@
       var stt = document.createElement('div'); stt.className = 'istat';
       var btn = document.createElement('button'); btn.className = 'ibtn';
       if (eq) { stt.textContent = 'Equipped'; btn.textContent = 'EQUIPPED'; btn.disabled = true; }
-      else if (own) { stt.textContent = 'Owned'; btn.textContent = 'EQUIP'; btn.classList.add('equip'); btn.addEventListener('click', function () { gear.equipped[it.cat] = it.id; saveGear(); sfx.tap(); buildShop(); }); }
+      else if (own) { stt.textContent = 'Owned'; btn.textContent = 'EQUIP'; btn.classList.add('equip'); btn.addEventListener('click', function () { gear.equipped[it.cat] = it.id; delete gear.keepEq[it.cat]; saveGear(); sfx.tap(); buildShop(); }); }
       else if (!unlocked) {
         var a = ACHIEVEMENTS[it.unlock], pr = a.progress(stats);
         stt.innerHTML = '<span class="req">🔒 ' + a.text + '</span><span class="prog">' + pr[0].toLocaleString('en-US') + (a.unit || '') + ' / ' + pr[1].toLocaleString('en-US') + (a.unit || '') + ' · then <i class="coin"></i>' + it.price + '</span>';
@@ -1297,8 +1345,14 @@
         stt.innerHTML = '<i class="coin"></i>' + it.price + (coins < it.price ? ' <span class="need">need ' + (it.price - coins) + ' more</span>' : '');
         btn.innerHTML = 'BUY <i class="coin"></i>' + it.price; btn.classList.add('buy'); btn.disabled = coins < it.price;
         btn.addEventListener('click', function () {
-          if (getCoins() < it.price || !isUnlocked(it) || owns(it.id)) return;
-          setCoins(getCoins() - it.price); gear.owned.push(it.id); saveGear(); sfx.good(); buildShop();
+          var coins = getCoins();
+          if (coins < it.price || !isUnlocked(it) || owns(it.id)) return;
+          // save the gear first, then the coins; if either write fails, undo everything so no coins are lost without the item
+          var prevOwned = gear.owned.slice();
+          gear.owned.push(it.id);
+          if (!saveGear()) { gear.owned = prevOwned; purchaseFailed(); return; }
+          if (!setCoins(coins - it.price)) { gear.owned = prevOwned; saveGear(); purchaseFailed(); return; }
+          sfx.good(); buildShop();
         });
       }
       card.appendChild(stt); card.appendChild(btn); grid.appendChild(card);
@@ -1306,6 +1360,7 @@
       shopCards.push({ c: cv2, r: previewRider(it.cat), eq: eqOverride, cat: it.cat });
     });
   }
+  function purchaseFailed() { buildShop(); $('#shopHint').textContent = 'Couldn\u2019t save on this device, so nothing was bought and no coins were spent.'; }
   function drawShopPreviews() {
     shopCards.forEach(function (pv, i) {
       var c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
@@ -1325,21 +1380,199 @@
 
   // ---------- snapshot album ----------
   // At streaks in SNAP_STREAKS a photo card of the rider (equipped gear, frozen mid-trick) is drawn on an
-  // offscreen canvas, saved as a JPEG data URL in localStorage (tt_album, max ALBUM_CAP, oldest dropped).
+  // offscreen canvas as a JPEG data URL (max ALBUM_CAP cards, oldest dropped).
   // The trick on the card is always one not yet in the album for that ride; once all are used,
   // it just avoids repeating the most recent one. Nothing is uploaded anywhere.
+  //
+  // Storage: images live in IndexedDB (db 'times-tricks', stores 'meta' + 'img', both keyed by card id and
+  // always written in one transaction). localStorage only holds a small metadata copy (tt_album_meta) so the
+  // count is instant. v7 and older kept whole cards in localStorage (tt_album): on startup they're copied
+  // into IndexedDB with put() by id, read back and verified, and only then is tt_album removed. An
+  // interrupted migration just re-runs next time (same ids, so no duplicates). Without IndexedDB the album
+  // falls back to tt_album in localStorage, kept under ALBUM_LS_BUDGET characters.
   var SNAP_STREAKS = [5, 10, 15, 20], ALBUM_CAP = 30, SNAP_W = 600, SNAP_H = 800, SNAP_Q = 0.72;
-  function getAlbum() { try { var a = JSON.parse(localStorage.getItem('tt_album') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-  function saveAlbum(a) {
+  var ALBUM_LS_BUDGET = 900000;
+  var META_FIELDS = ['id', 't', 'n', 'rider', 'trick', 'trickName', 'streak', 'level', 'levelName', 'place', 'kb'];
+  function metaOf(e) { var m = {}; META_FIELDS.forEach(function (f) { if (e[f] !== undefined) m[f] = e[f]; }); return m; }
+  function validMeta(e) { return !!e && typeof e === 'object' && typeof e.id === 'string' && e.id !== '' && typeof e.rider === 'string' && typeof e.trick === 'string'; }
+  function sortAlbum(a) { return a.sort(function (x, y) { return (num(x.t, 0) - num(y.t, 0)) || (num(x.n, 0) - num(y.n, 0)); }); }
+  function readLegacyAlbum() {   // old-format tt_album -> cards (with img), or null if absent/unreadable (left untouched)
+    var raw = null, a;
+    try { raw = localStorage.getItem('tt_album'); } catch (e) { return null; }
+    if (raw == null) return null;
+    try { a = JSON.parse(raw); } catch (e) { return null; }
+    if (!Array.isArray(a)) return null;
+    var seen = {};
+    return a.map(function (e, i) {
+      if (!e || typeof e !== 'object' || typeof e.img !== 'string' || e.img.indexOf('data:image') !== 0) return null;
+      var c = Object.assign({}, e);
+      if (typeof c.id !== 'string' || !c.id) c.id = 'legacy_' + num(c.t, 0) + '_' + i;
+      if (seen[c.id]) c.id += '_' + i;   // never let two old cards collapse into one
+      seen[c.id] = 1;
+      c.t = num(c.t, 0); c.n = num(c.n, i);
+      if (typeof c.rider !== 'string') c.rider = 'skate';
+      if (typeof c.trick !== 'string') c.trick = '';
+      if (!isFinite(c.kb)) c.kb = Math.round(c.img.length * 0.75 / 1024);
+      return c;
+    }).filter(Boolean);
+  }
+  var legacyBoot = readLegacyAlbum();
+  var album = { mode: 'loading', db: null, list: [], lsImgs: {}, queue: Promise.resolve() };
+  (function () {   // instant list (count, trick choice) until the real store is ready
+    var seen = {}, list = [];
+    arr(store.get('album_meta', [])).concat(legacyBoot || []).forEach(function (e) { if (validMeta(e) && !seen[e.id]) { seen[e.id] = 1; list.push(metaOf(e)); } });
+    album.list = sortAlbum(list);
+  })();
+  function noop() {}
+  function albumRun(fn) { var p = album.queue.then(function () { return fn(); }); album.queue = p.then(noop, noop); return p; }   // album changes run in order
+  function saveMetaCache() { store.set('album_meta', album.list); }   // failure is harmless: IndexedDB is the source of truth
+  function idbOpen() {
+    return new Promise(function (res, rej) {
+      var done = false, timer = setTimeout(function () { if (!done) { done = true; rej(new Error('IndexedDB open timed out')); } }, 4000);
+      var rq = indexedDB.open('times-tricks', 1);
+      rq.onupgradeneeded = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('img')) db.createObjectStore('img', { keyPath: 'id' });
+      };
+      rq.onsuccess = function () { var db = rq.result; if (done) { db.close(); return; } done = true; clearTimeout(timer); db.onversionchange = function () { db.close(); }; res(db); };
+      rq.onerror = function () { if (!done) { done = true; clearTimeout(timer); rej(rq.error || new Error('IndexedDB open failed')); } };
+    });
+  }
+  function idbTx(db, mode, fn) {   // run fn(metaStore, imgStore) in one transaction; resolves with fn's result once it commits
+    return new Promise(function (res, rej) {
+      var tx = db.transaction(['meta', 'img'], mode), out;
+      tx.oncomplete = function () { res(out); };
+      tx.onerror = function () { rej(tx.error || new Error('IndexedDB error')); };
+      tx.onabort = function () { rej(tx.error || new Error('IndexedDB transaction aborted')); };
+      try { out = fn(tx.objectStore('meta'), tx.objectStore('img')); } catch (e) { try { tx.abort(); } catch (e2) {} rej(e); }
+    });
+  }
+  function migrateLegacy(db, legacy) {
+    if (!legacy) return Promise.resolve();
+    if (!legacy.length) { store.remove('album'); return Promise.resolve(); }
+    return idbTx(db, 'readwrite', function (ms, is) {
+      legacy.forEach(function (e) { ms.put(metaOf(e)); is.put({ id: e.id, img: e.img }); });
+    }).then(function () {
+      return idbTx(db, 'readonly', function (ms, is) {
+        var got = {};
+        legacy.forEach(function (e) {
+          var r1 = ms.get(e.id), r2 = is.get(e.id);
+          got[e.id] = 0;
+          r1.onsuccess = function () { if (r1.result) got[e.id]++; };
+          r2.onsuccess = function () { if (r2.result && r2.result.img === e.img) got[e.id]++; };
+        });
+        return got;
+      });
+    }).then(function (got) {
+      if (!legacy.every(function (e) { return got[e.id] === 2; })) throw new Error('album migration check failed');
+      if (!store.remove('album')) throw new Error('could not remove old album key');   // only now, once every card is verified
+    });
+  }
+  function loadIdbList(db) {
+    return idbTx(db, 'readonly', function (ms, is) {
+      var box = { list: [], keys: null }, r = ms.getAll();
+      r.onsuccess = function () { box.list = r.result || []; };
+      if (is.getAllKeys) { var k = is.getAllKeys(); k.onsuccess = function () { box.keys = k.result || []; }; }
+      return box;
+    }).then(function (box) {
+      var has = null; if (box.keys) { has = {}; box.keys.forEach(function (id) { has[id] = 1; }); }
+      return box.list.filter(function (e) { return validMeta(e) && (!has || has[e.id]); });
+    });
+  }
+  function useLsAlbum(legacy) {
+    var list = []; album.mode = 'ls'; album.lsImgs = {};
+    (legacy || []).forEach(function (e) { album.lsImgs[e.id] = e.img; list.push(metaOf(e)); });
+    album.list = sortAlbum(list);
+  }
+  function lsSave(list) {   // fallback: write whole cards to tt_album within the size budget, dropping the oldest if needed
+    var a = list.slice();
     while (a.length > ALBUM_CAP) a.shift();
     for (;;) {
-      try { localStorage.setItem('tt_album', JSON.stringify(a)); return true; }
-      catch (e) { if (a.length <= 1) return false; a.shift(); }   // storage full: drop oldest and retry
+      var s = JSON.stringify(a.map(function (m) { return Object.assign({}, m, { img: album.lsImgs[m.id] }); }));
+      if (s.length <= ALBUM_LS_BUDGET || a.length <= 1) {
+        try { localStorage.setItem('tt_album', s); return a; } catch (e) { if (a.length <= 1) return null; }
+      }
+      a.shift();
     }
   }
+  function pruneLsImgs() { var keep = {}; album.list.forEach(function (m) { keep[m.id] = album.lsImgs[m.id]; }); album.lsImgs = keep; }
+  function albumInit() {
+    var legacy = legacyBoot; legacyBoot = null;
+    return Promise.resolve().then(function () {
+      if (!window.indexedDB) throw new Error('no IndexedDB');
+      return idbOpen();
+    }).then(function (db) {
+      album.db = db;
+      return migrateLegacy(db, legacy).then(function () { return loadIdbList(db); }).then(function (list) {
+        album.mode = 'idb'; album.list = sortAlbum(list); saveMetaCache();
+      });
+    }).catch(function (err) {
+      if (album.db) { try { album.db.close(); } catch (e) {} album.db = null; }
+      console.info('album: using localStorage (' + (err && err.message) + ')');
+      useLsAlbum(readLegacyAlbum());
+    }).then(function () {
+      refreshAlbumCount();
+      if (G.screen === 'album' && !viewing) buildAlbum();
+    });
+  }
+  function nextSeq() { var n = 0; album.list.forEach(function (e) { n = Math.max(n, num(e.n, 0)); }); return n + 1; }
+  function albumAdd(entry, img) {   // call inside albumRun
+    var meta = metaOf(entry), next = album.list.concat([meta]), drop = next.length > ALBUM_CAP ? next.slice(0, next.length - ALBUM_CAP) : [];
+    if (album.mode === 'idb') {
+      return idbTx(album.db, 'readwrite', function (ms, is) {
+        ms.put(meta); is.put({ id: meta.id, img: img });
+        drop.forEach(function (d) { ms.delete(d.id); is.delete(d.id); });
+      }).then(function () { album.list = next.slice(drop.length); saveMetaCache(); return true; },
+        function (e) { console.warn('snapshot not saved', e); return false; });
+    }
+    album.lsImgs[meta.id] = img;
+    var kept = lsSave(next);
+    if (!kept) { delete album.lsImgs[meta.id]; return Promise.resolve(false); }
+    album.list = kept; pruneLsImgs();
+    return Promise.resolve(kept.some(function (m) { return m.id === meta.id; }));
+  }
+  function albumRemove(id) {
+    return albumRun(function () {
+      var next = album.list.filter(function (m) { return m.id !== id; });
+      if (album.mode === 'idb') {
+        return idbTx(album.db, 'readwrite', function (ms, is) { ms.delete(id); is.delete(id); })
+          .then(function () { album.list = next; saveMetaCache(); return true; }, function () { return false; });
+      }
+      var kept = lsSave(next); if (!kept) return false;
+      album.list = kept; pruneLsImgs(); return true;
+    });
+  }
+  function albumImgs(ids) {   // -> Promise of { id: dataURL }
+    return albumRun(function () {
+      var o = {};
+      if (album.mode !== 'idb') { ids.forEach(function (id) { if (album.lsImgs[id]) o[id] = album.lsImgs[id]; }); return o; }
+      return idbTx(album.db, 'readonly', function (ms, is) {
+        ids.forEach(function (id) { var r = is.get(id); r.onsuccess = function () { if (r.result && typeof r.result.img === 'string') o[id] = r.result.img; }; });
+        return o;
+      }).catch(function () { return {}; });
+    });
+  }
+  function albumInfo() {   // for tests
+    var info = { mode: album.mode, count: album.list.length, legacyKey: (function () { try { return localStorage.getItem('tt_album') != null; } catch (e) { return null; } })() };
+    if (album.mode !== 'idb') return info;
+    return idbTx(album.db, 'readonly', function (ms, is) {
+      var r1 = ms.count(), r2 = is.count();
+      r1.onsuccess = function () { info.idbMeta = r1.result; }; r2.onsuccess = function () { info.idbImg = r2.result; };
+      return info;
+    });
+  }
+  function albumClear() {   // for tests
+    return albumRun(function () {
+      var done = function () { album.list = []; album.lsImgs = {}; saveMetaCache(); refreshAlbumCount(); };
+      if (album.mode === 'idb') return idbTx(album.db, 'readwrite', function (ms, is) { ms.clear(); is.clear(); }).then(done);
+      store.remove('album'); done();
+    });
+  }
+  album.queue = albumInit();
   function rideTricks(r) { return r.tricks.concat(r.grinds || []); }
-  function chooseSnapTrick(r, performed, album) {
-    var all = rideTricks(r), mine = album.filter(function (e) { return e.rider === r.id; });
+  function chooseSnapTrick(r, performed, list) {
+    var all = rideTricks(r), mine = list.filter(function (e) { return e.rider === r.id; });
     var used = mine.map(function (e) { return e.trick; });
     var opts = all.filter(function (t) { return used.indexOf(t.id) < 0; });
     if (!opts.length) { var lastId = mine.length ? mine[mine.length - 1].trick : null; opts = all.filter(function (t) { return t.id !== lastId; }); }
@@ -1394,21 +1627,26 @@
     x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,0.35)'; roundRectC(x, 10, 10, W - 20, H - 20, 22); x.stroke();
     return cnv.toDataURL('image/jpeg', SNAP_Q);
   }
-  function takeSnapshot(streak, performed) {
-    var r = rider(), album = getAlbum(), trick = chooseSnapTrick(r, performed, album), now = Date.now();
-    var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: settings.level, levelName: level().name, place: settings.place };
-    try { entry.img = renderSnapCard(dress(r), trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
-    album.push(entry);
-    if (!saveAlbum(album)) return null;
-    showSnapToast(); refreshAlbumCount();
-    return entry;
+  function takeSnapshot(streak, performed) {   // -> Promise of the saved entry (or null)
+    var r = rider(), dressed = dress(r), lvl = settings.level, lvlName = level().name, place = settings.place;
+    return albumRun(function () {
+      var trick = chooseSnapTrick(r, performed, album.list), now = Date.now(), img;
+      var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, n: nextSeq(), rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: lvl, levelName: lvlName, place: place };
+      try { img = renderSnapCard(dressed, trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
+      entry.kb = Math.round(img.length * 0.75 / 1024);
+      return albumAdd(entry, img).then(function (ok) {
+        if (!ok) return null;
+        showSnapToast(); refreshAlbumCount();
+        entry.img = img; return entry;
+      });
+    });
   }
   var toastTimer = null;
   function showSnapToast() {
     var t = $('#snapToast'); t.classList.add('show'); clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
   }
-  function refreshAlbumCount() { var n = getAlbum().length; $('#albumCount').textContent = n; $('#albumCount').classList.toggle('hidden', !n); }
+  function refreshAlbumCount() { var n = album.list.length; $('#albumCount').textContent = n; $('#albumCount').classList.toggle('hidden', !n); }
 
   // album screens
   function openAlbum() {
@@ -1416,23 +1654,29 @@
     G.screen = 'album'; el.menu.classList.remove('show'); $('#album').classList.add('show'); buildAlbum();
   }
   function closeAlbum() { closeViewer(); $('#album').classList.remove('show'); toMenu(); }
+  var albumBuildN = 0;
   function buildAlbum() {
-    var a = getAlbum().slice().reverse(), grid = $('#albumGrid'); grid.innerHTML = '';
+    var a = album.list.slice().reverse(), grid = $('#albumGrid'), token = ++albumBuildN, ims = {}; grid.innerHTML = '';
     $('#albumSub').textContent = a.length ? a.length + ' of ' + ALBUM_CAP + ' snapshots · newest first' : '';
     $('#albumEmpty').classList.toggle('hidden', a.length > 0);
     a.forEach(function (e) {
       var b = document.createElement('button'); b.className = 'snap'; b.setAttribute('data-id', e.id);
-      var im = document.createElement('img'); im.src = e.img; im.alt = 'Streak ' + e.streak + ' ' + e.trickName; b.appendChild(im);
+      var im = document.createElement('img'); im.alt = 'Streak ' + e.streak + ' ' + e.trickName; b.appendChild(im); ims[e.id] = im;
       var cap = document.createElement('span'); cap.textContent = 'STREAK ' + e.streak + ' · ' + e.trickName; b.appendChild(cap);
-      b.addEventListener('click', function () { openViewer(e.id); });
+      b.addEventListener('click', function () { openViewer(e.id, im.getAttribute('src')); });
       grid.appendChild(b);
+    });
+    albumImgs(a.map(function (e) { return e.id; })).then(function (imgs) {
+      if (token !== albumBuildN) return;
+      for (var id in ims) if (imgs[id]) ims[id].src = imgs[id];
     });
   }
   var viewing = null, delArmed = false, delTimer = null;
-  function openViewer(id) {
-    var e = getAlbum().filter(function (x) { return x.id === id; })[0]; if (!e) return;
-    viewing = e; delArmed = false; $('#delSnap').textContent = 'DELETE'; $('#delSnap').classList.remove('armed');
-    $('#viewImg').src = e.img;
+  function openViewer(id, src) {
+    var e = album.list.filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    viewing = Object.assign({}, e, { img: src || null }); delArmed = false; $('#delSnap').textContent = 'DELETE'; $('#delSnap').classList.remove('armed');
+    if (src) $('#viewImg').src = src;
+    else albumImgs([id]).then(function (o) { if (viewing && viewing.id === id && o[id]) { viewing.img = o[id]; $('#viewImg').src = o[id]; } });
     $('#viewCap').textContent = 'Streak ' + e.streak + ' · ' + e.trickName + ' · ' + fmtDate(e.t) + ' · Level ' + e.level;
     $('#saveHint').textContent = 'Tip: you can also press and hold the picture to save it.';
     $('#viewer').classList.add('show');
@@ -1440,7 +1684,7 @@
   function closeViewer() { $('#viewer').classList.remove('show'); viewing = null; }
   function dataURLtoBlob(u) { var p = u.split(','), bin = atob(p[1]), arr = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: 'image/jpeg' }); }
   function saveViewing() {
-    if (!viewing) return;
+    if (!viewing || !viewing.img) return;
     var name = 'times-tricks-streak' + viewing.streak + '-' + viewing.trick + '.jpg', file = null;
     try { file = new File([dataURLtoBlob(viewing.img)], name, { type: 'image/jpeg' }); } catch (e) { file = null; }
     if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
@@ -1454,8 +1698,8 @@
   function deleteViewing() {
     if (!viewing) return;
     if (!delArmed) { delArmed = true; $('#delSnap').textContent = 'TAP AGAIN TO DELETE'; $('#delSnap').classList.add('armed'); clearTimeout(delTimer); delTimer = setTimeout(function () { delArmed = false; $('#delSnap').textContent = 'DELETE'; $('#delSnap').classList.remove('armed'); }, 3000); return; }
-    var id = viewing.id; saveAlbum(getAlbum().filter(function (x) { return x.id !== id; }));
-    closeViewer(); buildAlbum(); refreshAlbumCount();
+    var id = viewing.id; closeViewer();
+    albumRemove(id).then(function () { buildAlbum(); refreshAlbumCount(); });
   }
   $('#albumBtn').addEventListener('click', openAlbum);
   $('#albumBack').addEventListener('click', closeAlbum);
@@ -1597,11 +1841,14 @@
   // re-check every 30s so an open tab stops at the deadline (between rounds, never mid-round)
   if (pilot) setInterval(function () { if (pilotExpired() && G.screen !== 'play' && G.screen !== 'expired') showPilotEnded(); }, 30000);
 
+  // ---------- startup ----------
+  // Each step is guarded so one bad saved value can never stop the game loop from starting.
+  function safe(fn) { try { fn(); } catch (err) { console.error('startup:', err); } }
   // saved choices that are no longer valid/unlocked fall back to defaults (older saves migrate cleanly)
-  if (riderById(settings.rider).id !== settings.rider || !rideUnlocked(riderById(settings.rider))) settings.rider = 'skate';
-  if (!PLACE_BY_ID[settings.place] || !placeUnlocked(PLACE_BY_ID[settings.place])) settings.place = 'street';
+  safe(function () { if (riderById(settings.rider).id !== settings.rider || !rideUnlocked(riderById(settings.rider))) settings.rider = 'skate'; });
+  safe(function () { if (!PLACE_BY_ID[settings.place] || !placeUnlocked(PLACE_BY_ID[settings.place])) settings.place = 'street'; });
   window.addEventListener('resize', function () { placeThumbsDirty = true; });
-  buildMenu(); refreshMenu(); applyMode(); resize(); updateHUD(); el.banner.className = 'hide';
-  if (pilotExpired()) showPilotEnded();
+  safe(buildMenu); safe(refreshMenu); safe(applyMode); safe(resize); safe(updateHUD); safe(function () { el.banner.className = 'hide'; });
+  safe(function () { if (pilotExpired()) showPilotEnded(); });
   requestAnimationFrame(frame);
 })();
