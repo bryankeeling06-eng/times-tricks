@@ -10,7 +10,7 @@
 <title>Times Tricks — Multiplication Street Runner</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<link rel="stylesheet" href="style.css?v=3" />
+<link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
 <div id="app">
@@ -51,6 +51,10 @@
 
       <h2>Pick your ride</h2>
       <div id="riderPick" class="riders"></div>
+      <div class="coinRow">
+        <div class="coinPill"><i class="coin"></i><b id="coinTotal">0</b><small>coins</small></div>
+        <button id="shopBtn" class="shopBtn">GEAR SHOP ▸</button>
+      </div>
 
       <h2>Level</h2>
       <div id="levelPick" class="levels"></div>
@@ -87,6 +91,9 @@
         <div><small>ACCURACY</small><b id="eAcc">0%</b></div>
         <div><small>TOP STREAK</small><b id="eStreak">0</b></div>
       </div>
+      <div class="coinsEarned"><i class="coin big"></i><b id="eCoins">+0</b><span>coins earned</span></div>
+      <p id="eCoinLine" class="note coinLine"></p>
+      <div id="eUnlock" class="unlockMsg"></div>
       <p id="eLine" class="note"></p>
       <h2>Facts to practice</h2>
       <div id="eFacts" class="facts"></div>
@@ -95,11 +102,26 @@
     </div>
   </div>
 
+  <!-- Gear shop (in-game coins only; nothing real is bought) -->
+  <div id="shop" class="overlay">
+    <div class="panel shopPanel">
+      <div class="shopHead">
+        <h2 class="endTitle">GEAR SHOP</h2>
+        <div class="coinPill"><i class="coin"></i><b id="shopCoins">0</b></div>
+        <button id="shopClose" class="hbtn" aria-label="Close shop">✕</button>
+      </div>
+      <div id="shopTabs" class="seg tabs"></div>
+      <p id="shopHint" class="note shopHint"></p>
+      <div id="shopGrid" class="shopGrid"></div>
+      <button id="shopBack" class="big alt">BACK</button>
+    </div>
+  </div>
+
   <!-- Pause -->
   <div id="pause" class="overlay">
     <div class="panel small"><h2 class="endTitle">PAUSED</h2><button id="resumeBtn" class="big">RESUME ▶</button></div>
   </div>
 </div>
-<script src="game.js?v=3"></script>
+<script src="game.js?v=4"></script>
 </body>
 </html>

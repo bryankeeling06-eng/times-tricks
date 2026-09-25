@@ -30,9 +30,33 @@ Same style as Math Trail's pilot links: add `?pilot=<name>&until=YYYY-MM-DD`.
 4. Missing factor (`? × 7 = 56`)
 5. 2-digit × 1-digit
 
+## Coins and the gear shop
+
+In-game coins only. No real money, no purchases, no accounts, nothing leaves the device.
+
+- **Earning** (added at the end of a finished round; quitting early forfeits them): 2 per correct answer, +1 per multiplier step above x1 (so a x3 answer gives 4), +3 per grind, +5 for 80%+ accuracy with 8+ answers, +10 for a new personal best. A decent 75-second round earns ~50–70 coins.
+- **Shop** (start screen → GEAR SHOP): Shirts, Helmets, Boards (skateboard only), Scooters (scooter only). Defaults are free and owned. Buy, then Equip. Every card shows a live preview of the rider using that item. Equipped gear shows in gameplay, tricks, grinds, wipeouts and the rider picker.
+- **Milestone items** are locked until an achievement, then bought with coins:
+  - Gold Jersey: 20-answer streak
+  - Chrome Dome helmet: score 6,000+ on Level 3
+  - Galaxy Deck and Rail Spark scooter: land 10 grinds (finished rounds)
+  - Gold Rush scooter: finish a Level 5 round with 80%+ accuracy (8+ answers)
+
+### Adding gear
+
+Everything is data in `game.js`:
+
+- **New item:** add one object to `GEAR`, e.g.
+  `{ id: 'shirt_orange', cat: 'shirt', name: 'Traffic Cone', price: 70, color: '#ff7a3d', dark: '#c2521f' }`.
+  Look fields per category: shirts `color, dark, stripe?, glow?`; helmets `color, pattern, accent?` (`none, stripe, double, bolt, star, checker, flames, chrome`); boards/scooters `deck, wheel, pattern?, accent?, wheelGlow?` plus `bar` for scooters (`none, stripe, split, checker, flames, stars`).
+- **Lock it behind a milestone:** add `unlock: '<achievement id>'`. Achievements live in `ACHIEVEMENTS` (text + a `progress(stats)` returning `[current, goal]`).
+- **New category:** add to `GEAR_CATS`. A category with `rider: '<id>'` applies to that ride; set `gearCat` on the rider.
+- **Coin tuning:** the `COINS` object.
+
 ## Saved in the browser (localStorage, `tt_` prefix)
 
 - Chosen rider, level, and answer mode
+- Coins (`tt_coins`), owned/equipped gear (`tt_gear`), milestone stats (`tt_stats`)
 - Personal best per level (`tt_best_<level>`)
 - Missed facts (`tt_missed`): missed facts come back more often in later rounds until you get them right a few times. The end screen lists them under "Facts to practice".
 

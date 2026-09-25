@@ -26,7 +26,7 @@
   // origin = ground contact, ~100 units tall), tricks list, and drawVehicle(ctx, pose, rider).
   var RIDERS = [
     {
-      id: 'skate', name: 'Skateboard',
+      id: 'skate', name: 'Skateboard', gearCat: 'board',
       hoodie: '#19c3c0', hoodieDark: '#0f8f8c', deck: '#ff7a3d',
       stance: { feet: [[-15, -13], [15, -13]], hip: [0, -45], shoulder: [3, -71], hands: [[-24, -56], [27, -60]], elbow: [1, -1] },
       tricks: [
@@ -41,7 +41,7 @@
       drawVehicle: drawSkateboard
     },
     {
-      id: 'scooter', name: 'Scooter',
+      id: 'scooter', name: 'Scooter', gearCat: 'scooter',
       hoodie: '#ff4f8b', hoodieDark: '#c22e63', deck: '#19c3c0',
       stance: { feet: [[-15, -14], [2, -14]], hip: [-6, -47], shoulder: [5, -71], hands: [[16, -77], [20, -77]], elbow: [-1, 1] },
       tricks: [
@@ -56,6 +56,102 @@
     }
   ];
   function riderById(id) { for (var i = 0; i < RIDERS.length; i++) if (RIDERS[i].id === id) return RIDERS[i]; return RIDERS[0]; }
+
+  // ======================================================================
+  // GEAR SHOP: all data-driven. To add an item, add one object to GEAR.
+  //   id (unique), cat (a GEAR_CATS id), name, price (coins; 0 = free starter, owned by default),
+  //   optional unlock (an ACHIEVEMENTS id), plus the look fields for that category:
+  //   shirt:   color, dark, [stripe], [glow]
+  //   helmet:  color, pattern ('none'|'stripe'|'double'|'bolt'|'star'|'checker'|'flames'|'chrome'), [accent]
+  //   board / scooter: deck, wheel, [pattern ('none'|'stripe'|'split'|'checker'|'flames'|'stars')], [accent], [wheelGlow], [bar] (scooter)
+  // A category with `rider` only applies to that ride (its rider has gearCat = that category id).
+  // ======================================================================
+  var GEAR_CATS = [
+    { id: 'shirt', name: 'Shirts' },
+    { id: 'helmet', name: 'Helmets' },
+    { id: 'board', name: 'Boards', rider: 'skate' },
+    { id: 'scooter', name: 'Scooters', rider: 'scooter' }
+  ];
+  var GEAR = [
+    // Shirts (color null = the ride's own hoodie color)
+    { id: 'shirt_classic', cat: 'shirt', name: 'Classic Hoodie', price: 0 },
+    { id: 'shirt_black', cat: 'shirt', name: 'Street Black', price: 40, color: '#34344a', dark: '#1c1c2a' },
+    { id: 'shirt_red', cat: 'shirt', name: 'Hot Red', price: 50, color: '#e8394a', dark: '#a81f2e' },
+    { id: 'shirt_lime', cat: 'shirt', name: 'Lime Zest', price: 60, color: '#9be23c', dark: '#5f9a1c' },
+    { id: 'shirt_blue', cat: 'shirt', name: 'Ocean Blue', price: 80, color: '#2f7cf6', dark: '#1b4fb0' },
+    { id: 'shirt_purple', cat: 'shirt', name: 'Royal Stripe', price: 100, color: '#8a4dff', dark: '#5a2bb8', stripe: '#ffc94d' },
+    { id: 'shirt_neon', cat: 'shirt', name: 'Neon Glow', price: 150, color: '#39ffd8', dark: '#14b89a', glow: true },
+    { id: 'shirt_gold', cat: 'shirt', name: 'Gold Jersey', price: 180, color: '#ffc94d', dark: '#c8931f', stripe: '#ffffff', unlock: 'streak20' },
+    // Helmets (accent null = the ride's accent color)
+    { id: 'helm_classic', cat: 'helmet', name: 'Classic Black', price: 0, color: '#16121f', pattern: 'stripe' },
+    { id: 'helm_white', cat: 'helmet', name: 'White Racer', price: 40, color: '#f2f2f7', pattern: 'double', accent: '#e8394a' },
+    { id: 'helm_red', cat: 'helmet', name: 'Matte Red', price: 50, color: '#c7283a', pattern: 'none' },
+    { id: 'helm_star', cat: 'helmet', name: 'Star Sticker', price: 80, color: '#2f3a8f', pattern: 'star', accent: '#ffc94d' },
+    { id: 'helm_bolt', cat: 'helmet', name: 'Lightning', price: 90, color: '#19c3c0', pattern: 'bolt', accent: '#ffe04d' },
+    { id: 'helm_checker', cat: 'helmet', name: 'Checkered', price: 120, color: '#f2f2f7', pattern: 'checker', accent: '#16121f' },
+    { id: 'helm_flames', cat: 'helmet', name: 'Hot Flames', price: 150, color: '#16121f', pattern: 'flames', accent: '#ff7a3d' },
+    { id: 'helm_chrome', cat: 'helmet', name: 'Chrome Dome', price: 220, color: '#c9ceda', pattern: 'chrome', unlock: 'l3pb' },
+    // Skateboards
+    { id: 'board_classic', cat: 'board', name: 'Classic Orange', price: 0, deck: '#ff7a3d', wheel: '#f4e9d8' },
+    { id: 'board_black', cat: 'board', name: 'Blackout', price: 40, deck: '#23202e', wheel: '#e8394a', pattern: 'stripe', accent: '#e8394a' },
+    { id: 'board_neon', cat: 'board', name: 'Neon Wheels', price: 60, deck: '#19c3c0', wheel: '#9dff3c', wheelGlow: true },
+    { id: 'board_split', cat: 'board', name: 'Sunset Split', price: 90, deck: '#ff4f8b', accent: '#ffb35c', pattern: 'split', wheel: '#ffe04d' },
+    { id: 'board_checker', cat: 'board', name: 'Checker Deck', price: 110, deck: '#f2f2f7', accent: '#16121f', pattern: 'checker', wheel: '#f2f2f7' },
+    { id: 'board_flame', cat: 'board', name: 'Flame Deck', price: 150, deck: '#c7283a', accent: '#ffb35c', pattern: 'flames', wheel: '#ff9a3d' },
+    { id: 'board_galaxy', cat: 'board', name: 'Galaxy Deck', price: 240, deck: '#3b1f7a', accent: '#ffffff', pattern: 'stars', wheel: '#8ff5ee', wheelGlow: true, unlock: 'grinds10' },
+    // Scooters
+    { id: 'scoot_classic', cat: 'scooter', name: 'Classic Teal', price: 0, deck: '#19c3c0', bar: '#d9dbe8', wheel: '#16121f' },
+    { id: 'scoot_black', cat: 'scooter', name: 'Blackout', price: 40, deck: '#23202e', bar: '#4a4a5c', wheel: '#e8394a' },
+    { id: 'scoot_red', cat: 'scooter', name: 'Candy Red', price: 60, deck: '#e8394a', bar: '#f2f2f7', wheel: '#16121f' },
+    { id: 'scoot_lime', cat: 'scooter', name: 'Lime Rider', price: 80, deck: '#9be23c', bar: '#23202e', wheel: '#9be23c' },
+    { id: 'scoot_purple', cat: 'scooter', name: 'Purple Haze', price: 100, deck: '#8a4dff', bar: '#ffc94d', wheel: '#16121f', pattern: 'stripe', accent: '#ffc94d' },
+    { id: 'scoot_checker', cat: 'scooter', name: 'Checker', price: 130, deck: '#f2f2f7', accent: '#16121f', pattern: 'checker', bar: '#16121f', wheel: '#f2f2f7' },
+    { id: 'scoot_spark', cat: 'scooter', name: 'Rail Spark', price: 200, deck: '#ff7a3d', accent: '#ffe04d', pattern: 'flames', bar: '#ff7a3d', wheel: '#9dff3c', wheelGlow: true, unlock: 'grinds10' },
+    { id: 'scoot_gold', cat: 'scooter', name: 'Gold Rush', price: 250, deck: '#23202e', accent: '#ffc94d', pattern: 'stripe', bar: '#ffc94d', wheel: '#ffc94d', unlock: 'l5acc80' }
+  ];
+  var GEAR_BY_ID = {}; GEAR.forEach(function (g) { GEAR_BY_ID[g.id] = g; });
+  function catDefault(cat) { for (var i = 0; i < GEAR.length; i++) if (GEAR[i].cat === cat && GEAR[i].price === 0) return GEAR[i]; }
+
+  // Milestones that unlock premium items. progress(stats) -> [current, goal].
+  var L3_PB_GOAL = 6000;
+  var ACHIEVEMENTS = {
+    streak20: { text: 'Hit a 20-answer streak', progress: function (s) { return [Math.min(s.bestStreak, 20), 20]; } },
+    grinds10: { text: 'Land 10 grinds (finished rounds)', progress: function (s) { return [Math.min(s.grinds, 10), 10]; } },
+    l5acc80: { text: 'Finish a Level 5 round with 80%+ accuracy (8+ answers)', progress: function (s) { return [s.l5acc80 ? 80 : Math.min(s.l5bestAcc, 79), 80]; }, unit: '%' },
+    l3pb: { text: 'Score ' + L3_PB_GOAL.toLocaleString('en-US') + '+ on Level 3', progress: function () { return [Math.min(store.get('best_3', 0), L3_PB_GOAL), L3_PB_GOAL]; } }
+  };
+  function getStats() { var s = store.get('stats', {}); return { bestStreak: s.bestStreak || 0, grinds: s.grinds || 0, l5acc80: !!s.l5acc80, l5bestAcc: s.l5bestAcc || 0, rounds: s.rounds || 0 }; }
+  function achieved(id, stats) { var p = ACHIEVEMENTS[id].progress(stats || getStats()); return p[0] >= p[1]; }
+  function isUnlocked(item, stats) { return !item.unlock || achieved(item.unlock, stats); }
+
+  // Coins
+  var COINS = { perCorrect: 2, perMultStep: 1, grind: 3, accuracyBonus: 5, accuracyMin: 80, accuracyMinAnswers: 8, bestBonus: 10 };
+  function getCoins() { return Math.max(0, store.get('coins', 0) | 0); }
+  function setCoins(v) { store.set('coins', Math.max(0, v | 0)); }
+
+  // Owned / equipped
+  var gear = (function () {
+    var g = store.get('gear', null) || {}, owned = Array.isArray(g.owned) ? g.owned.filter(function (id) { return GEAR_BY_ID[id]; }) : [];
+    GEAR.forEach(function (it) { if (it.price === 0 && owned.indexOf(it.id) < 0) owned.push(it.id); });
+    var eq = g.equipped || {};
+    GEAR_CATS.forEach(function (c) { var it = GEAR_BY_ID[eq[c.id]]; if (!it || it.cat !== c.id || owned.indexOf(it.id) < 0) eq[c.id] = catDefault(c.id).id; });
+    return { owned: owned, equipped: eq };
+  })();
+  function saveGear() { store.set('gear', gear); }
+  function owns(id) { return gear.owned.indexOf(id) >= 0; }
+
+  function lookFor(r, eq) {
+    eq = eq || gear.equipped;
+    var s = GEAR_BY_ID[eq.shirt] || catDefault('shirt'), h = GEAR_BY_ID[eq.helmet] || catDefault('helmet');
+    var v = (r.gearCat && (GEAR_BY_ID[eq[r.gearCat]] || catDefault(r.gearCat))) || {};
+    return {
+      shirt: s.color || r.hoodie, shirtDark: s.dark || r.hoodieDark, stripe: s.stripe || null, glow: s.glow ? (s.color || r.hoodie) : null,
+      helmet: h.color, helmetPattern: h.pattern || 'none', helmetAccent: h.accent || r.deck,
+      deck: v.deck || r.deck, deckPattern: v.pattern || 'none', deckAccent: v.accent || '#ffffff',
+      wheel: v.wheel || '#f4e9d8', wheelGlow: !!v.wheelGlow, bar: v.bar || '#d9dbe8'
+    };
+  }
+  function dress(r, eq) { var o = Object.create(r); o.look = lookFor(r, eq); return o; }
 
   // ---------- levels ----------
   function factKey(kind, a, b) { return kind === 'm' ? 'm:' + Math.min(a, b) + 'x' + Math.max(a, b) : 'd:' + a + 'x' + b; }
@@ -145,6 +241,7 @@
   };
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
+  window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
 
   function level() { return LEVELS[settings.level - 1]; }
   function rider() { return riderById(settings.rider); }
@@ -321,56 +418,106 @@
   }
   function seg(c, pts, w, col) { c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); c.stroke(); }
   function drawPerson(c, r, pose) {
+    var L = r.look || lookFor(r);
     var st = r.stance, cr = pose.crouch || 0;
     var hip = [st.hip[0] - cr * 2, st.hip[1] + cr * 11], sh = [st.shoulder[0] + cr * 5, st.shoulder[1] + cr * 13];
     var head = [sh[0] + 3, sh[1] - 13];
     var hands = st.hands.map(function (h) { return [h[0] + cr * 3, h[1] + cr * 11 + (pose.armsUp || 0) * -18]; });
     // back arm
-    var e0 = ik(sh, hands[0], 14, 14, st.elbow[0]); seg(c, [sh, e0, hands[0]], 6, r.hoodieDark);
+    var e0 = ik(sh, hands[0], 14, 14, st.elbow[0]); seg(c, [sh, e0, hands[0]], 6, L.shirtDark);
     // legs
     st.feet.forEach(function (f) {
       var k = ik(hip, f, 19, 19, -1); seg(c, [hip, k, f], 8.5, '#2b2f4a');
       c.fillStyle = '#f2f2f7'; c.beginPath(); c.ellipse(f[0] + 2, f[1] + 1, 6.5, 3, 0, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#16121f'; c.fillRect(f[0] - 4.5, f[1] + 2.5, 13, 1.5);
     });
-    // torso (hoodie)
-    seg(c, [hip, sh], 14, r.hoodie);
-    c.fillStyle = r.hoodieDark; c.beginPath(); c.arc(hip[0], hip[1], 7, 0, Math.PI * 2); c.fill();
+    // torso (shirt)
+    if (L.glow) { c.save(); c.shadowColor = L.glow; c.shadowBlur = 12; }
+    seg(c, [hip, sh], 14, L.shirt);
+    if (L.glow) c.restore();
+    if (L.stripe) seg(c, [[hip[0] + 1, hip[1] - 2], [sh[0] + 1, sh[1] + 2]], 3, L.stripe);
+    c.fillStyle = L.shirtDark; c.beginPath(); c.arc(hip[0], hip[1], 7, 0, Math.PI * 2); c.fill();
     // head + helmet
     c.fillStyle = '#c98b5e'; c.beginPath(); c.arc(head[0], head[1], 8.5, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#16121f'; c.beginPath(); c.arc(head[0], head[1] - 1, 10, Math.PI * 1.02, Math.PI * 2.02); c.fill();
-    c.fillRect(head[0] - 10, head[1] - 2, 20, 3);
-    c.fillStyle = r.deck; c.fillRect(head[0] - 3, head[1] - 10.5, 3, 9);
+    drawHelmet(c, head[0], head[1], L);
     c.fillStyle = '#16121f'; c.fillRect(head[0] + 5, head[1] + 1, 3, 2);  // eye/shades
     // front arm
-    var e1 = ik(sh, hands[1], 14, 14, st.elbow[1]); seg(c, [sh, e1, hands[1]], 6, r.hoodie);
+    var e1 = ik(sh, hands[1], 14, 14, st.elbow[1]); seg(c, [sh, e1, hands[1]], 6, L.shirt);
     c.fillStyle = '#c98b5e'; hands.forEach(function (h) { c.beginPath(); c.arc(h[0], h[1], 3, 0, Math.PI * 2); c.fill(); });
   }
+  function starPath(c, x, y, R) { c.beginPath(); for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? R * 0.45 : R; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); }
+  function drawHelmet(c, hx, hy, L) {
+    var cx = hx, cy = hy - 1, R = 10, pat = L.helmetPattern, ac = L.helmetAccent;
+    c.save();
+    c.beginPath(); c.arc(cx, cy, R, Math.PI * 1.02, Math.PI * 2.02); c.closePath();
+    if (pat === 'chrome') { var g = c.createLinearGradient(cx - R, cy - R, cx + R, cy); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#c9ceda'); g.addColorStop(0.7, '#6f7390'); g.addColorStop(1, '#e9ecf5'); c.fillStyle = g; }
+    else c.fillStyle = L.helmet;
+    c.fill(); c.clip();
+    c.fillStyle = ac;
+    if (pat === 'stripe') c.fillRect(cx - 3, cy - R - 0.5, 3, R);
+    else if (pat === 'double') { c.fillRect(cx - 5, cy - R, 2, R); c.fillRect(cx - 1, cy - R, 2, R); }
+    else if (pat === 'bolt') { c.beginPath(); c.moveTo(cx - 1, cy - 10); c.lineTo(cx + 4, cy - 10); c.lineTo(cx + 1, cy - 5.5); c.lineTo(cx + 5, cy - 5.5); c.lineTo(cx - 3, cy + 0.5); c.lineTo(cx - 0.5, cy - 4); c.lineTo(cx - 4, cy - 4); c.closePath(); c.fill(); }
+    else if (pat === 'star') { starPath(c, cx - 1, cy - 5, 4); c.fill(); }
+    else if (pat === 'checker') { for (var i = -12; i < 12; i += 3) for (var j = -12; j < 1; j += 3) if (((i + j) / 3 & 1) === 0) c.fillRect(cx + i, cy + j, 3, 3); }
+    else if (pat === 'flames') {
+      [[ac, 0], ['#ffe04d', 2.2]].forEach(function (f) {
+        c.fillStyle = f[0]; c.beginPath(); c.moveTo(cx + R, cy);
+        for (var k = 0; k < 4; k++) { var bx = cx + R - 4 - k * 4.2; c.lineTo(bx + 1, cy - 7 + k * 0.6 + f[1]); c.lineTo(bx - 1.2, cy - 1.5 + f[1] * 0.4); }
+        c.lineTo(cx - R, cy); c.closePath(); c.fill();
+      });
+    }
+    else if (pat === 'chrome') { c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1.6; c.beginPath(); c.arc(cx - 1, cy - 1, 6.5, Math.PI * 1.15, Math.PI * 1.55); c.stroke(); }
+    c.restore();
+    c.fillStyle = pat === 'chrome' ? '#8a90a8' : L.helmet; c.fillRect(cx - 10, cy - 1, 20, 3);
+  }
+  function deckPattern(c, pat, ac, x0, x1, yTop, h) { // pattern on a straight deck section
+    c.fillStyle = ac;
+    if (pat === 'stripe') c.fillRect(x0 + 2, yTop + h / 2 - 0.7, x1 - x0 - 4, 1.4);
+    else if (pat === 'checker') { for (var x = x0 + 1, k = 0; x < x1 - 1; x += 3, k++) { c.fillRect(x, yTop + (k & 1 ? h / 2 : 0), 3, h / 2); } }
+    else if (pat === 'flames') { for (var fx = x0 + 3; fx < x1 - 8; fx += 10) { c.beginPath(); c.moveTo(fx, yTop + h); c.lineTo(fx + 9, yTop + h); c.lineTo(fx + 1, yTop + 0.5); c.closePath(); c.fill(); } }
+    else if (pat === 'stars') { [[0.12, 0.3], [0.3, 0.7], [0.47, 0.25], [0.63, 0.65], [0.82, 0.35], [0.93, 0.7]].forEach(function (p) { c.fillRect(x0 + (x1 - x0) * p[0], yTop + h * p[1] - 0.6, 1.3, 1.3); }); }
+  }
   function drawSkateboard(c, pose, r) {
+    var L = r.look || lookFor(r);
     c.save(); c.translate(0, -9); c.rotate(pose.boardRot || 0); c.scale(pose.spinX == null ? 1 : pose.spinX, pose.flipY == null ? 1 : pose.flipY);
     c.fillStyle = '#9aa0b5'; c.fillRect(-24, 0, 8, 3); c.fillRect(16, 0, 8, 3);
-    c.fillStyle = '#f4e9d8'; [-21, 21].forEach(function (x) { c.beginPath(); c.arc(x, 5, 3.8, 0, Math.PI * 2); c.fill(); });
-    seg(c, [[-35, -6], [-27, -1], [27, -1], [35, -6]], 5, r.deck);
+    if (L.wheelGlow) { c.save(); c.shadowColor = L.wheel; c.shadowBlur = 8; }
+    c.fillStyle = L.wheel; [-21, 21].forEach(function (x) { c.beginPath(); c.arc(x, 5, 3.8, 0, Math.PI * 2); c.fill(); });
+    if (L.wheelGlow) c.restore();
+    seg(c, [[-35, -6], [-27, -1], [27, -1], [35, -6]], 5, L.deck);
+    if (L.deckPattern === 'split') seg(c, [[0, -1], [27, -1], [35, -6]], 5, L.deckAccent);
+    else deckPattern(c, L.deckPattern, L.deckAccent, -27, 27, -3.5, 5);
     seg(c, [[-34, -8], [-27, -3.5], [27, -3.5], [34, -8]], 1.5, '#16121f');
     c.restore();
   }
   function drawScooter(c, pose, r) {
+    var L = r.look || lookFor(r);
     c.save(); c.rotate(pose.boardRot || 0);
     // deck + rear wheel spin around the stem (tailwhip)
     c.save(); c.translate(23, 0); c.scale(pose.spinX == null ? 1 : pose.spinX, 1); c.translate(-23, 0);
-    c.fillStyle = r.deck; roundRectC(c, -26, -13, 48, 6, 3); c.fill();
+    c.fillStyle = L.deck; roundRectC(c, -26, -13, 48, 6, 3); c.fill();
+    c.save(); roundRectC(c, -26, -13, 48, 6, 3); c.clip();
+    if (L.deckPattern === 'split') { c.fillStyle = L.deckAccent; c.fillRect(-2, -13, 24, 6); }
+    else deckPattern(c, L.deckPattern, L.deckAccent, -25, 21, -11.5, 4.5);
+    c.restore();
     c.fillStyle = '#16121f'; c.fillRect(-24, -13, 42, 1.5);
     c.fillStyle = '#9aa0b5'; c.fillRect(-31, -14, 8, 2.5);
-    wheel(c, -25, -6); c.restore();
+    wheel(c, -25, -6, L); c.restore();
     // stem, fork, front wheel
-    seg(c, [[26, -6], [22, -14], [18, -79]], 4, '#d9dbe8');
-    wheel(c, 26, -6);
+    seg(c, [[26, -6], [22, -14], [18, -79]], 4, L.bar);
+    wheel(c, 26, -6, L);
     c.save(); c.translate(18, -79); c.scale(pose.barX == null ? 1 : pose.barX, 1);
-    seg(c, [[-8, 0], [8, 0]], 4, '#d9dbe8'); seg(c, [[-9, 0], [-5, 0]], 5, '#16121f'); seg(c, [[5, 0], [9, 0]], 5, '#16121f');
+    seg(c, [[-8, 0], [8, 0]], 4, L.bar); seg(c, [[-9, 0], [-5, 0]], 5, '#16121f'); seg(c, [[5, 0], [9, 0]], 5, '#16121f');
     c.restore();
     c.restore();
   }
-  function wheel(c, x, y) { c.fillStyle = '#16121f'; c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill(); c.fillStyle = '#9aa0b5'; c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill(); }
+  function wheel(c, x, y, L) {
+    var col = (L && L.wheel) || '#16121f';
+    if (L && L.wheelGlow) { c.save(); c.shadowColor = col; c.shadowBlur = 8; }
+    c.fillStyle = col; c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill();
+    if (L && L.wheelGlow) c.restore();
+    c.fillStyle = '#9aa0b5'; c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill();
+  }
   function roundRectC(c, x, y, w, h, rr) { c.beginPath(); c.moveTo(x + rr, y); c.arcTo(x + w, y, x + w, y + h, rr); c.arcTo(x + w, y + h, x, y + h, rr); c.arcTo(x, y + h, x, y, rr); c.arcTo(x, y, x + w, y, rr); c.closePath(); }
 
   function drawRider(c, x, y, sc, r, pose) {
@@ -478,6 +625,7 @@
     audio();
     G.screen = 'play'; G.score = 0; G.streak = 0; G.topStreak = 0; G.correct = 0; G.wrong = 0; G.timeLeft = ROUND_SECONDS;
     G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false; G.sinceGrind = 0; G.lastWasGrind = false;
+    G.roundGrinds = 0; G.coinParts = { answers: 0, streak: 0, grinds: 0, bonus: 0 };
     el.menu.classList.remove('show'); el.end.classList.remove('show'); el.pause.classList.remove('show');
     setPhase('ready'); el.banner.className = ''; el.prompt.textContent = 'READY…'; el.gateBar.style.width = '0%';
     clearInput(); updateHUD(); applyMode();
@@ -509,12 +657,13 @@
     var r = rider(), grinds = r.grinds || [];
     var doGrind = grinds.length && G.lastWasGrind !== true && (window.__tt.forceGrind || Math.random() < GRIND.chance || G.sinceGrind >= GRIND.pity);
     if (doGrind) {
-      G.trick = pick(grinds); G.sinceGrind = 0; G.lastWasGrind = true;
+      G.trick = pick(grinds); G.sinceGrind = 0; G.lastWasGrind = true; G.roundGrinds++; G.coinParts.grinds += COINS.grind;
       if (G.streak >= 3) pts += GRIND.streakBonus * m;   // small grind bonus on longer streaks
     } else {
       G.trick = G.streak < 3 ? r.tricks[0] : pick(r.tricks.slice(1)); G.sinceGrind = (G.sinceGrind || 0) + 1; G.lastWasGrind = false;
     }
     G.score += pts; recordHit(p); G.trickT = 0;
+    G.coinParts.answers += COINS.perCorrect; G.coinParts.streak += (m - 1) * COINS.perMultStep;
     G.gateState = 'good'; G.boostSpeed = Math.max(G.speed, G.gateDist / 0.38);
     if (G.trick.grind) startGrind();
     el.banner.className = 'right'; flashDisplay('flashR');
@@ -540,6 +689,19 @@
     $('#eScore').textContent = G.score; $('#eBest').textContent = best; $('#eAcc').textContent = acc + '%'; $('#eStreak').textContent = G.topStreak;
     $('#newBest').classList.toggle('show', isNew);
     $('#eLine').textContent = lv.name + ' · ' + G.correct + ' of ' + total + ' correct';
+    // coins + milestone stats (only for finished rounds)
+    var before = getStats(), cp = G.coinParts;
+    if (total >= COINS.accuracyMinAnswers && acc >= COINS.accuracyMin) cp.bonus += COINS.accuracyBonus;
+    if (isNew) cp.bonus += COINS.bestBonus;
+    var earned = cp.answers + cp.streak + cp.grinds + cp.bonus; setCoins(getCoins() + earned);
+    var after = { bestStreak: Math.max(before.bestStreak, G.topStreak), grinds: before.grinds + G.roundGrinds, rounds: before.rounds + 1,
+      l5acc80: before.l5acc80 || (lv.id === 5 && total >= 8 && acc >= 80), l5bestAcc: lv.id === 5 && total >= 8 ? Math.max(before.l5bestAcc, acc) : before.l5bestAcc };
+    store.set('stats', after);
+    $('#eCoins').textContent = '+' + earned;
+    var parts = []; if (cp.answers) parts.push(cp.answers + ' answers'); if (cp.streak) parts.push(cp.streak + ' streak'); if (cp.grinds) parts.push(cp.grinds + ' grinds'); if (cp.bonus) parts.push(cp.bonus + ' bonus');
+    $('#eCoinLine').textContent = (parts.length ? parts.join(' · ') + ' · ' : '') + 'total ' + getCoins();
+    var newly = GEAR.filter(function (it) { return it.unlock && !achieved(it.unlock, before) && achieved(it.unlock, after); });
+    var ul = $('#eUnlock'); ul.textContent = newly.length ? 'UNLOCKED in the shop: ' + newly.map(function (it) { return it.name; }).join(', ') + '!' : ''; ul.classList.toggle('show', newly.length > 0);
     var box = $('#eFacts'); box.innerHTML = '';
     G.roundMissed.forEach(function (f) { var d = document.createElement('div'); d.className = 'fact'; d.textContent = f.text; box.appendChild(d); });
     var shown = G.roundMissed.map(function (f) { return f.key; }), m = getMissed();
@@ -611,7 +773,7 @@
       if (gx < VW + 80 && gx > -80) drawGate(gx);
     }
     if (G.phase === 'boost' && G.trick && G.trick.grind) drawRail(rx);
-    var r = rider(), pose;
+    var r = dress(rider()), pose;
     if (G.phase === 'wipe' && G.wipeT >= 0) pose = wipePose(clamp(G.wipeT / 1.7, 0, 1));
     else if (G.trick && G.phase === 'boost' && G.trick.grind) pose = grindPose(G.trick, G.trickT);
     else if (G.trick && G.phase === 'boost') pose = trickPose(G.trick.id, clamp(G.trickT / 0.8, 0, 1));
@@ -663,6 +825,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (G.screen === 'expired') return;
+    if (G.screen === 'shop') { if (e.key === 'Escape') closeShop(); return; }
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen !== 'play') return;
@@ -719,6 +882,7 @@
       b.classList.toggle('sel', id === settings.level); b.querySelector('.b').textContent = best ? 'BEST ' + best : '';
     });
     $$('#modePick button').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-mode') === settings.mode); });
+    $('#coinTotal').textContent = getCoins();
     var m = getMissed(), n = Object.keys(m).filter(function (k) { return level().fits(m[k]); }).length;
     $('#practiceNote').textContent = n ? n + ' tricky fact' + (n > 1 ? 's' : '') + ' saved for this level — they’ll show up more often.' : 'Missed facts get saved and come back more often until you nail them.';
   }
@@ -733,15 +897,79 @@
       x.fillStyle = 'rgba(255,230,150,0.9)'; x.beginPath(); x.arc(w * 0.75, h * 0.62, h * 0.22, 0, Math.PI * 2); x.fill();
       x.fillStyle = '#26143a'; x.fillRect(0, h - 14, w, 14);
       var sel = pv.r.id === settings.rider;
-      drawRider(x, w / 2 - 4, h - 12, h / 150, pv.r, sel ? trickPose(pv.r.tricks[1].id, (G.t * 0.55) % 1.6 < 0.8 ? ((G.t * 0.55) % 1.6) / 0.8 : 0) : idlePose(G.t));
+      drawRider(x, w / 2 - 4, h - 12, h / 150, dress(pv.r), sel ? trickPose(pv.r.tricks[1].id, (G.t * 0.55) % 1.6 < 0.8 ? ((G.t * 0.55) % 1.6) / 0.8 : 0) : idlePose(G.t));
     });
   }
+
+
+  // ---------- gear shop UI ----------
+  var shopCat = 'shirt', shopCards = [];
+  var PREVIEW = { shirt: { k: 1 / 118, gy: 0.93 }, helmet: { k: 1 / 42, gy: 2.3 }, board: { k: 1 / 70, gy: 0.9 }, scooter: { k: 1 / 100, gy: 0.93 } };
+  function previewRider(cat) { var c = GEAR_CATS.filter(function (x) { return x.id === cat; })[0]; return riderById(c && c.rider ? c.rider : settings.rider); }
+  function openShop() {
+    if (pilotExpired()) { showPilotEnded(); return; }
+    G.screen = 'shop'; el.menu.classList.remove('show'); $('#shop').classList.add('show'); buildShop();
+  }
+  function closeShop() { $('#shop').classList.remove('show'); toMenu(); }
+  function buildShop() {
+    $('#shopCoins').textContent = getCoins();
+    var tabs = $('#shopTabs'); tabs.innerHTML = '';
+    GEAR_CATS.forEach(function (c) {
+      var b = document.createElement('button'); b.textContent = c.name; b.setAttribute('data-cat', c.id); if (c.id === shopCat) b.className = 'sel';
+      b.addEventListener('click', function () { shopCat = c.id; buildShop(); $('#shopGrid').scrollTop = 0; });
+      tabs.appendChild(b);
+    });
+    var cat = GEAR_CATS.filter(function (x) { return x.id === shopCat; })[0];
+    $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name.toLowerCase() + '.' : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
+    var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = [];
+    var stats = getStats(), coins = getCoins();
+    GEAR.filter(function (it) { return it.cat === shopCat; }).forEach(function (it) {
+      var card = document.createElement('div'), own = owns(it.id), eq = gear.equipped[it.cat] === it.id, unlocked = isUnlocked(it, stats);
+      card.className = 'item' + (eq ? ' equipped' : own ? ' owned' : '') + (!unlocked ? ' locked' : ''); card.setAttribute('data-id', it.id);
+      var cv2 = document.createElement('canvas'); card.appendChild(cv2);
+      var nm = document.createElement('div'); nm.className = 'iname'; nm.textContent = it.name; card.appendChild(nm);
+      var stt = document.createElement('div'); stt.className = 'istat';
+      var btn = document.createElement('button'); btn.className = 'ibtn';
+      if (eq) { stt.textContent = 'Equipped'; btn.textContent = 'EQUIPPED'; btn.disabled = true; }
+      else if (own) { stt.textContent = 'Owned'; btn.textContent = 'EQUIP'; btn.classList.add('equip'); btn.addEventListener('click', function () { gear.equipped[it.cat] = it.id; saveGear(); sfx.tap(); buildShop(); }); }
+      else if (!unlocked) {
+        var a = ACHIEVEMENTS[it.unlock], pr = a.progress(stats);
+        stt.innerHTML = '<span class="req">🔒 ' + a.text + '</span><span class="prog">' + pr[0].toLocaleString('en-US') + (a.unit || '') + ' / ' + pr[1].toLocaleString('en-US') + (a.unit || '') + ' · then <i class="coin"></i>' + it.price + '</span>';
+        btn.textContent = 'LOCKED'; btn.disabled = true;
+      } else {
+        stt.innerHTML = '<i class="coin"></i>' + it.price + (coins < it.price ? ' <span class="need">need ' + (it.price - coins) + ' more</span>' : '');
+        btn.innerHTML = 'BUY <i class="coin"></i>' + it.price; btn.classList.add('buy'); btn.disabled = coins < it.price;
+        btn.addEventListener('click', function () {
+          if (getCoins() < it.price || !isUnlocked(it) || owns(it.id)) return;
+          setCoins(getCoins() - it.price); gear.owned.push(it.id); saveGear(); sfx.good(); buildShop();
+        });
+      }
+      card.appendChild(stt); card.appendChild(btn); grid.appendChild(card);
+      var eqOverride = {}; for (var k in gear.equipped) eqOverride[k] = gear.equipped[k]; eqOverride[it.cat] = it.id;
+      shopCards.push({ c: cv2, r: previewRider(it.cat), eq: eqOverride, cat: it.cat });
+    });
+  }
+  function drawShopPreviews() {
+    shopCards.forEach(function (pv, i) {
+      var c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
+      var d = Math.min(window.devicePixelRatio || 1, 3); if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+      var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0);
+      var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#4a1d5e'); g.addColorStop(0.75, '#d2505a'); g.addColorStop(1, '#ffb35c');
+      x.fillStyle = g; x.fillRect(0, 0, w, h);
+      var P = PREVIEW[pv.cat] || PREVIEW.shirt, gy = h * P.gy;
+      x.fillStyle = '#26143a'; x.fillRect(0, gy, w, h);
+      drawRider(x, w / 2 - (pv.cat === 'helmet' ? 6 : 2), gy, h * P.k, dress(pv.r, pv.eq), idlePose(G.t + i * 0.7));
+    });
+  }
+  $('#shopBtn').addEventListener('click', openShop);
+  $('#shopBack').addEventListener('click', closeShop);
+  $('#shopClose').addEventListener('click', closeShop);
 
   // ---------- loop ----------
   var last = performance.now();
   function frame(now) {
     var dt = Math.min(0.05, (now - last) / 1000); last = now;
-    try { update(dt); render(); if (G.screen === 'menu') drawPreviews(); } catch (err) { console.error(err); }
+    try { update(dt); render(); if (G.screen === 'menu') drawPreviews(); else if (G.screen === 'shop') drawShopPreviews(); } catch (err) { console.error(err); }
     requestAnimationFrame(frame);
   }
   // ===== PILOT / PREVIEW LINK GATE =====
@@ -772,7 +1000,7 @@
   function pilotExpired() { return !!pilot && Date.now() > pilot.until.ms; }
   function showPilotEnded() {
     G.screen = 'expired'; setPhase('idle');
-    [el.menu, el.end, el.pause].forEach(function (o) { o.classList.remove('show'); });
+    [el.menu, el.end, el.pause, $('#shop')].forEach(function (o) { o.classList.remove('show'); });
     el.banner.className = 'hide'; $('#pilotEnded').classList.add('show');
   }
   function pilotLabel() {
