@@ -340,7 +340,8 @@
     score: 0, streak: 0, topStreak: 0, correct: 0, wrong: 0, timeLeft: ROUND_SECONDS,
     prob: null, lastKey: null, gateDist: 0, gateTotal: 1, gateState: 'none', gateX: 0, gateFade: 1,
     worldX: 0, speed: BASE_SPEED, input: '', choices: [], roundMissed: [],
-    trick: null, trickT: 0, wipeT: -1, particles: [], pops: [], t: 0
+    trick: null, trickT: 0, wipeT: -1, particles: [], pops: [], t: 0,
+    pendingSnaps: []   // snapshot cards earned this round; rendered + saved after the round ends (never during play)
   };
   window.__tt = { G: G, settings: settings, LEVELS: LEVELS, RIDERS: RIDERS };
   window.__tt.forceGrind = false;
@@ -350,7 +351,7 @@
   window.__tt.albumInfo = function () { return albumRun(function () { return albumInfo(); }); };
   window.__tt.albumClear = function () { return albumClear(); };
   window.__tt.goals = function () { var st = getStats(); return GOALS.map(function (g) { return { id: g.id, tier: g.tier, done: achieved(g.id, st), p: g.progress(st), rewards: rewardsFor(g.id).map(function (r) { return r.name; }) }; }); };
-  window.__tt.PLACES = PLACES;
+  window.__tt.pendingSnaps = function () { return G.pendingSnaps.length; };
   window.__tt.gearApi = function () { return { coins: getCoins(), gear: gear, stats: getStats(), look: lookFor(rider()), GEAR: GEAR }; };
 
   function level() { return LEVELS[settings.level - 1]; }
@@ -382,15 +383,70 @@
   };
 
   // ---------- canvas setup ----------
-  var cv = $('#cv'), ctx = cv.getContext('2d');
-  var VW = 400, VH = 400, dpr = 1, scale = 1, TOP = 0;
+  var cv = $('#cv'), ctx = cv.getContext('2d'), mainCtx = ctx;
+  var VW = 400, VH = 400, dpr = 1, scale = 1, TOP = 0, glowK = 1, needRender = true;
+  // Canvas pixel ratio is capped at 2: 3x phones cost 2.25x the pixels for a difference you can't see.
+  // shadowBlur-style glows are sized in canvas pixels, so glowK keeps their on-screen size the same as before the cap.
+  var DPR_CAP = 2;
+  function rawDpr() { return Math.min(window.devicePixelRatio || 1, 3); }
+  function screenDpr() { return Math.min(rawDpr(), DPR_CAP); }
   function resize() {
     var r = cv.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    if (!r.width || !r.height) return;   // hidden or zero-size: keep the last good size (k = 0 would make VW infinite)
+    dpr = screenDpr(); glowK = dpr / rawDpr();
     cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
     var k = Math.min(r.height / VH, r.width / 380);   // keep at least ~380 logical px of street visible
     scale = k * dpr; VW = r.width / k; TOP = -(r.height / k - VH);
+    layers = {}; needRender = true; previewsDirty = true; shopDirty = true;
   }
+
+  // ---------- render caches ----------
+  // Layers: static parts of the main scene (sky gradient, sun, moon) pre-rendered once per size/place at full canvas
+  // resolution with the same transform, then copied 1:1, so they look exactly the same as drawing them every frame.
+  var layers = {};
+  function layer(key, x0, y0, x1, y1, draw) {
+    var L = layers[key];
+    if (!L) {
+      var s = scale, X0 = Math.floor(x0 * s), Y0 = Math.floor((y0 - TOP) * s), X1 = Math.ceil(x1 * s), Y1 = Math.ceil((y1 - TOP) * s);
+      var cnv = document.createElement('canvas'); cnv.width = Math.max(1, X1 - X0); cnv.height = Math.max(1, Y1 - Y0);
+      var g = cnv.getContext('2d'), saved = ctx;
+      g.setTransform(s, 0, 0, s, -X0, -TOP * s - Y0);
+      ctx = g; try { draw(); } finally { ctx = saved; }
+      L = layers[key] = { c: cnv, X: X0, Y: Y0 };
+    }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(L.c, L.X, L.Y); ctx.restore();
+  }
+  // gradients are made once per context (they live in user space, so they stay valid across frames)
+  function grad(c, key, make) { var m = c.__grads || (c.__grads = {}); return m[key] || (m[key] = make(c)); }
+  // Glow sprites: canvas shadowBlur is one of the slowest 2D operations (especially on iOS). Each glow is rendered once
+  // into a small offscreen canvas at the current pixel scale and reused. A sprite holds ONLY the blurred glow; the crisp
+  // shape is still drawn as vectors right after it, in the same order as before, so the picture stays the same.
+  var glowCache = {}, glowN = 0;
+  function pxScale(c) {
+    var m = c.getTransform ? c.getTransform() : null;
+    return m ? Math.max(Math.sqrt(m.a * m.a + m.b * m.b), Math.sqrt(m.c * m.c + m.d * m.d)) : scale;
+  }
+  // glow of shape(g) (drawn in local coords, inside the box x0,y0,w,h) with shadowBlur `blur` in `color`, at the current transform
+  function glow(c, key, blur, color, x0, y0, w, h, shape) {
+    var s = Math.round(pxScale(c) * 100) / 100; if (!(s > 0)) return;
+    var bpx = blur * (c.__card ? 1 : glowK), k = key + '|' + color + '|' + s + '|' + bpx.toFixed(2);
+    var sp = glowCache[k];
+    if (!sp) {
+      if (glowN > 400) { glowCache = {}; glowN = 0; }
+      var pad = Math.ceil(bpx * 1.7) + 2, cw = Math.ceil(w * s) + pad * 2, ch = Math.ceil(h * s) + pad * 2, off = cw + 64;
+      var cnv = document.createElement('canvas'); cnv.width = cw; cnv.height = ch;
+      var g = cnv.getContext('2d');
+      // draw the shape just off the left edge and let only its shadow (offset back into view) land on the sprite
+      g.shadowColor = color; g.shadowBlur = bpx; g.shadowOffsetX = off;
+      g.setTransform(s, 0, 0, s, pad - x0 * s - off, pad - y0 * s);
+      shape(g);
+      sp = glowCache[k] = { c: cnv, x: x0 - pad / s, y: y0 - pad / s, w: cw / s, h: ch / s }; glowN++;
+    }
+    c.drawImage(sp.c, sp.x, sp.y, sp.w, sp.h);
+  }
+  function glowAt(c, x, y, key, blur, color, x0, y0, w, h, shape) { c.translate(x, y); glow(c, key, blur, color, x0, y0, w, h, shape); c.translate(-x, -y); }
+  function rectShape(w, h) { return function (g) { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); }; }
+  function circleShape(r) { return function (g) { g.fillStyle = '#000'; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill(); }; }
   window.addEventListener('resize', resize);
   if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
 
@@ -410,6 +466,12 @@
   var props = []; (function () { var x = 60; while (x < TILE) { props.push({ x: x, type: pick(['palm', 'palm', 'qp', 'rail', 'fence', 'palm2']), s: 0.8 + Math.random() * 0.4 }); x += randInt(140, 260); } })();
 
   function drawSky(t) {
+    if (ctx === mainCtx) layer('sky-street', 0, TOP, VW, GROUND_Y, drawSkyStatic); else drawSkyStatic();
+    // a few stars up top
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (var s = 0; s < 14; s++) { var x = (s * 97.3) % VW, y = (s * 37.7) % 90 + 8; if ((Math.sin(t * 2 + s) + 1) > 0.6) ctx.fillRect(x, y, 1.6, 1.6); }
+  }
+  function drawSkyStatic() {
     var g = ctx.createLinearGradient(0, Math.min(0, TOP * 0.5), 0, GROUND_Y);
     g.addColorStop(0, '#24123f'); g.addColorStop(0.35, '#5b2166'); g.addColorStop(0.62, '#c43d5c'); g.addColorStop(0.85, '#ff8a4c'); g.addColorStop(1, '#ffc46b');
     ctx.fillStyle = g; ctx.fillRect(0, TOP, VW, GROUND_Y - TOP);
@@ -424,9 +486,6 @@
     ctx.fillStyle = '#c43d5c';
     for (var i = 0; i < 6; i++) { var yy = sy + 8 + i * 9; ctx.fillRect(sx - sr, yy, sr * 2, 1.5 + i * 0.9); }
     ctx.restore();
-    // a few stars up top
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    for (var s = 0; s < 14; s++) { var x = (s * 97.3) % VW, y = (s * 37.7) % 90 + 8; if ((Math.sin(t * 2 + s) + 1) > 0.6) ctx.fillRect(x, y, 1.6, 1.6); }
   }
   function drawCity(arr, par, base, col, winCol, parOffset) {
     var off = ((G.worldX * par + parOffset) % TILE + TILE) % TILE;
@@ -478,8 +537,8 @@
     // curb top highlight + ride surface + road
     ctx.fillStyle = '#3a2a52'; ctx.fillRect(0, GROUND_Y - 4, VW, 4);
     ctx.fillStyle = '#ff9a6b'; ctx.fillRect(0, GROUND_Y - 4, VW, 1.5);
-    var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH); g.addColorStop(0, '#4a3560'); g.addColorStop(1, '#221633');
-    ctx.fillStyle = g; ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+    ctx.fillStyle = grad(ctx, 'ground', function (c) { var g = c.createLinearGradient(0, GROUND_Y, 0, VH); g.addColorStop(0, '#4a3560'); g.addColorStop(1, '#221633'); return g; });
+    ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
     // expansion joints on the concrete
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5;
     var off = G.worldX % 90;
@@ -496,9 +555,8 @@
     for (var x = -off + 40; x < VW + gap; x += gap) {
       ctx.strokeStyle = pole || '#140a22'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.moveTo(x, GROUND_Y - 4); ctx.lineTo(x, GROUND_Y - 150); ctx.quadraticCurveTo(x, GROUND_Y - 162, x + 16, GROUND_Y - 162); ctx.stroke();
-      var gl = ctx.createRadialGradient(x + 18, GROUND_Y - 156, 1, x + 18, GROUND_Y - 156, 30);
-      gl.addColorStop(0, g0 || 'rgba(255,230,160,0.9)'); gl.addColorStop(1, g1 || 'rgba(255,200,120,0)');
-      ctx.fillStyle = gl; ctx.fillRect(x - 14, GROUND_Y - 188, 64, 64);
+      ctx.fillStyle = grad(ctx, 'lamp' + g0, function (c) { var gl = c.createRadialGradient(0, 0, 1, 0, 0, 30); gl.addColorStop(0, g0 || 'rgba(255,230,160,0.9)'); gl.addColorStop(1, g1 || 'rgba(255,200,120,0)'); return gl; });
+      ctx.translate(x + 18, GROUND_Y - 156); ctx.fillRect(-32, -32, 64, 64); ctx.translate(-(x + 18), -(GROUND_Y - 156));
     }
   }
 
@@ -511,6 +569,7 @@
     { id: 'night', name: 'Neon Night City', draw: drawNight, unlock: 'p_night', swatch: ['#05030f', '#ff4fd8'], railGlow: '#39ffd8' }
   ];
   var PLACE_BY_ID = {}; PLACES.forEach(function (p) { PLACE_BY_ID[p.id] = p; });
+  window.__tt.PLACES = PLACES;
   var curPlace = PLACES[0];
   function drawBackdrop(t, placeId) {
     curPlace = PLACE_BY_ID[placeId || settings.place] || PLACES[0];
@@ -535,7 +594,7 @@
 
   // Beach Boardwalk: daytime sky, ocean, pier, lifeguard towers, umbrellas, wooden boardwalk
   var beachProps = []; (function () { var x = 40, types = ['tower', 'palm', 'umbrella', 'surf', 'palm', 'umbrella']; var i = 0; while (x < TILE) { beachProps.push({ x: x, type: types[i % types.length], s: 0.85 + ((i * 37) % 10) / 30, c: ['#ff4f8b', '#19c3c0', '#ffc94d'][i % 3] }); x += 150 + ((i * 53) % 90); i++; } })();
-  function drawBeach(t) {
+  function drawBeachSky() {
     var hz = GROUND_Y - 96;
     var g = ctx.createLinearGradient(0, Math.min(0, TOP), 0, hz); g.addColorStop(0, '#2f9be8'); g.addColorStop(0.65, '#8fd3ff'); g.addColorStop(1, '#e4f6ff');
     ctx.fillStyle = g; ctx.fillRect(0, TOP, VW, hz - TOP + 1);
@@ -543,6 +602,10 @@
     var gl = ctx.createRadialGradient(sx, sy, 8, sx, sy, 70); gl.addColorStop(0, 'rgba(255,255,220,0.9)'); gl.addColorStop(1, 'rgba(255,255,220,0)');
     ctx.fillStyle = gl; ctx.fillRect(sx - 70, sy - 70, 140, 140);
     ctx.fillStyle = '#fffbe0'; ctx.beginPath(); ctx.arc(sx, sy, 20, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawBeach(t) {
+    var hz = GROUND_Y - 96, sx = VW * 0.8, sy = Math.max(TOP + 44, 56);
+    if (ctx === mainCtx) layer('sky-beach', 0, TOP, VW, Math.max(hz + 1, sy + 70), drawBeachSky); else drawBeachSky();
     // clouds
     var span = VW + 240, coff = (G.worldX * 0.03 + t * 4) % span;
     for (var i = 0; i < 4; i++) {
@@ -553,8 +616,8 @@
     }
     // headland + ocean
     ctx.fillStyle = '#3f8fa8'; ctx.beginPath(); ctx.moveTo(-10, hz); ctx.quadraticCurveTo(VW * 0.18, hz - 20, VW * 0.42, hz); ctx.fill();
-    var og = ctx.createLinearGradient(0, hz, 0, GROUND_Y - 22); og.addColorStop(0, '#1670bd'); og.addColorStop(1, '#38b9e6');
-    ctx.fillStyle = og; ctx.fillRect(0, hz, VW, GROUND_Y - 22 - hz);
+    ctx.fillStyle = grad(ctx, 'ocean', function (c) { var og = c.createLinearGradient(0, hz, 0, GROUND_Y - 22); og.addColorStop(0, '#1670bd'); og.addColorStop(1, '#38b9e6'); return og; });
+    ctx.fillRect(0, hz, VW, GROUND_Y - 22 - hz);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     for (var j = 0; j < 5; j++) {
       var yy = hz + 7 + j * 13, wo = ((G.worldX * (0.05 + j * 0.03) + t * 9 * (j % 2 ? 1 : -1)) % 46 + 46) % 46;
@@ -621,18 +684,27 @@
 
   // Neon Night City: dark sky, moon, neon signs, glowing lamps and reflections (rails glow cyan)
   var NEON = ['#ff4fd8', '#39ffd8', '#ffe04d', '#7c8cff'], NEON_TXT = ['ARCADE', 'PIZZA', 'SKATE', '24/7', 'TACOS', 'MATH', 'RADIO', 'DINER'];
-  function drawNight(t) {
+  function drawNightSky() {
     var g = ctx.createLinearGradient(0, Math.min(0, TOP), 0, GROUND_Y); g.addColorStop(0, '#04020c'); g.addColorStop(0.6, '#130833'); g.addColorStop(1, '#34115a');
     ctx.fillStyle = g; ctx.fillRect(0, TOP, VW, GROUND_Y - TOP);
-    for (var s = 0; s < 46; s++) {
-      var x = (s * 83.7) % VW, y = TOP + ((s * 47.3) % Math.max(60, (GROUND_Y - 150 - TOP)));
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.5 * Math.abs(Math.sin(t * 1.7 + s))) + ')'; ctx.fillRect(x, y, s % 5 ? 1.2 : 2, s % 5 ? 1.2 : 2);
-    }
+  }
+  function drawMoon() {
     var mx = VW * 0.22, my = Math.max(TOP + 40, 48);
     var mg = ctx.createRadialGradient(mx, my, 6, mx, my, 50); mg.addColorStop(0, 'rgba(255,240,210,0.45)'); mg.addColorStop(1, 'rgba(255,240,210,0)');
     ctx.fillStyle = mg; ctx.fillRect(mx - 50, my - 50, 100, 100);
     ctx.fillStyle = '#fff4d6'; ctx.beginPath(); ctx.arc(mx, my, 15, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#0c0624'; ctx.beginPath(); ctx.arc(mx + 7, my - 4, 13, 0, Math.PI * 2); ctx.fill();
+  }
+  function dashShape(g) { g.fillStyle = 'rgba(57,255,216,0.75)'; g.fillRect(0, 0, 34, 3); }
+  function drawNight(t) {
+    var main = ctx === mainCtx;
+    if (main) layer('sky-night', 0, TOP, VW, GROUND_Y, drawNightSky); else drawNightSky();
+    for (var s = 0; s < 46; s++) {
+      var x = (s * 83.7) % VW, y = TOP + ((s * 47.3) % Math.max(60, (GROUND_Y - 150 - TOP)));
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.5 * Math.abs(Math.sin(t * 1.7 + s))) + ')'; ctx.fillRect(x, y, s % 5 ? 1.2 : 2, s % 5 ? 1.2 : 2);
+    }
+    var mx = VW * 0.22, my = Math.max(TOP + 40, 48);
+    if (main) layer('moon', mx - 50, my - 50, mx + 50, my + 50, drawMoon); else drawMoon();
     drawCity(farCity, 0.08, GROUND_Y - 10, '#170c38', 'rgba(120,240,255,0.35)', 0);
     drawCity(nearCity, 0.25, GROUND_Y - 4, '#1d1040', 'rgba(255,150,230,0.6)', 300);
     drawNeonSigns(t);
@@ -641,16 +713,18 @@
     // ground: dark asphalt with neon reflections
     ctx.fillStyle = '#ff4fd8'; ctx.fillRect(0, GROUND_Y - 4, VW, 1.5);
     ctx.fillStyle = '#1a1236'; ctx.fillRect(0, GROUND_Y - 2.5, VW, 2.5);
-    var gg = ctx.createLinearGradient(0, GROUND_Y, 0, VH); gg.addColorStop(0, '#1f1542'); gg.addColorStop(1, '#0a0716');
-    ctx.fillStyle = gg; ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+    ctx.fillStyle = grad(ctx, 'nground', function (c) { var gg = c.createLinearGradient(0, GROUND_Y, 0, VH); gg.addColorStop(0, '#1f1542'); gg.addColorStop(1, '#0a0716'); return gg; });
+    ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
     for (var r = 0; r < 7; r++) {
       var rx = ((r * 97 - G.worldX * 0.25) % (VW + 60) + VW + 60) % (VW + 60) - 30, col = NEON[r % 4];
-      var rg = ctx.createLinearGradient(0, GROUND_Y, 0, GROUND_Y + 60); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      var rg = grad(ctx, 'refl' + col, function (c) { var g2 = c.createLinearGradient(0, GROUND_Y, 0, GROUND_Y + 60); g2.addColorStop(0, col); g2.addColorStop(1, 'rgba(0,0,0,0)'); return g2; });
       ctx.globalAlpha = 0.18; ctx.fillStyle = rg; ctx.fillRect(rx, GROUND_Y, 10, 60); ctx.globalAlpha = 1;
     }
-    ctx.save(); ctx.shadowColor = '#39ffd8'; ctx.shadowBlur = 6; ctx.fillStyle = 'rgba(57,255,216,0.75)';
-    var off2 = G.worldX % 70; for (var x2 = -off2; x2 < VW + 70; x2 += 70) ctx.fillRect(x2, GROUND_Y + 52, 34, 3);
-    ctx.restore();
+    // glowing road dashes (glow sprite + crisp dash)
+    var off2 = G.worldX % 70, x2;
+    for (x2 = -off2; x2 < VW + 70; x2 += 70) glowAt(ctx, x2, GROUND_Y + 52, 'dash', 6, '#39ffd8', 0, 0, 34, 3, dashShape);
+    ctx.fillStyle = 'rgba(57,255,216,0.75)';
+    for (x2 = -off2; x2 < VW + 70; x2 += 70) ctx.fillRect(x2, GROUND_Y + 52, 34, 3);
   }
   function drawNeonSigns(t) {
     var off = ((G.worldX * 0.25 + 300) % TILE + TILE) % TILE, base = GROUND_Y - 4;
@@ -660,26 +734,40 @@
       for (var i = 0; i < nearCity.length; i++) {
         var b = nearCity[i], x = ox + b.x; if (i % 3 !== 1 || b.h < 60 || x > VW || x + b.w < 0) continue;
         var col = NEON[i % 4], w = Math.min(b.w - 8, 46), sy = base - b.h + 12, on = Math.sin(t * 6 + i * 2.3) > -0.93;
-        ctx.globalAlpha = on ? 1 : 0.35; ctx.shadowColor = col; ctx.shadowBlur = 10; ctx.strokeStyle = col; ctx.fillStyle = col;
+        var txt = NEON_TXT[i % NEON_TXT.length];
+        ctx.globalAlpha = on ? 1 : 0.35; ctx.strokeStyle = col; ctx.fillStyle = col;
+        glowAt(ctx, x + 4, sy, 'sign' + w + txt, 10, col, -2, -2, w + 4, 18, signShape(w, txt));
         roundRect(x + 4, sy, w, 14, 4); ctx.stroke();
-        ctx.fillText(NEON_TXT[i % NEON_TXT.length], x + 4 + w / 2, sy + 7.5);
+        ctx.fillText(txt, x + 4 + w / 2, sy + 7.5);
       }
     }
     ctx.restore();
   }
 
+  function signShape(w, txt) {
+    return function (g) { g.lineWidth = 1.6; g.strokeStyle = g.fillStyle = '#000'; g.font = '900 8px ' + fontFam; g.textAlign = 'center'; g.textBaseline = 'middle'; roundRectC(g, 0, 0, w, 14, 4); g.stroke(); g.fillText(txt, w / 2, 7.5); };
+  }
+
   // ---------- gate ----------
+  // every piece keeps its glow and draw order: glow sprite, then the crisp shape
+  var GATE_W = 76, gatePillar = rectShape(8, 190), gateStrip = rectShape(4, 186);
+  function gateBanner(g) { g.fillStyle = '#000'; roundRectC(g, -GATE_W / 2 - 12, -30, GATE_W + 24, 34, 8); g.fill(); }
+  function gateBannerLine(g) { g.lineWidth = 3; g.strokeStyle = '#000'; roundRectC(g, -GATE_W / 2 - 12, -30, GATE_W + 24, 34, 8); g.stroke(); }
   function drawGate(x) {
     var st = G.gateState, col = st === 'good' ? '#3ee08f' : st === 'bad' ? '#ff4d5e' : '#19c3c0', col2 = st === 'good' ? '#3ee08f' : st === 'bad' ? '#ff4d5e' : '#ff4f8b';
-    var top = GROUND_Y - 190, w = 76;
+    var top = GROUND_Y - 190, w = GATE_W;
     ctx.save(); ctx.globalAlpha = G.gateFade;
-    ctx.shadowColor = col; ctx.shadowBlur = 14;
-    ctx.fillStyle = '#1a1030'; ctx.fillRect(x - w / 2 - 6, top, 8, 190); ctx.fillRect(x + w / 2 - 2, top, 8, 190);
-    ctx.fillStyle = col; ctx.fillRect(x - w / 2 - 4, top + 2, 4, 186); ctx.fillStyle = col2; ctx.fillRect(x + w / 2, top + 2, 4, 186);
+    ctx.fillStyle = '#1a1030';
+    glowAt(ctx, x - w / 2 - 6, top, 'gpil', 14, col, 0, 0, 8, 190, gatePillar); ctx.fillRect(x - w / 2 - 6, top, 8, 190);
+    glowAt(ctx, x + w / 2 - 2, top, 'gpil', 14, col, 0, 0, 8, 190, gatePillar); ctx.fillRect(x + w / 2 - 2, top, 8, 190);
+    glowAt(ctx, x - w / 2 - 4, top + 2, 'gstr', 14, col, 0, 0, 4, 186, gateStrip); ctx.fillStyle = col; ctx.fillRect(x - w / 2 - 4, top + 2, 4, 186);
+    glowAt(ctx, x + w / 2, top + 2, 'gstr', 14, col, 0, 0, 4, 186, gateStrip); ctx.fillStyle = col2; ctx.fillRect(x + w / 2, top + 2, 4, 186);
     // banner
-    ctx.shadowBlur = 18; ctx.fillStyle = '#1a1030'; roundRect(x - w / 2 - 12, top - 30, w + 24, 34, 8); ctx.fill();
+    glowAt(ctx, x, top, 'gban', 18, col, -w / 2 - 12, -30, w + 24, 34, gateBanner);
+    ctx.fillStyle = '#1a1030'; roundRect(x - w / 2 - 12, top - 30, w + 24, 34, 8); ctx.fill();
+    glowAt(ctx, x, top, 'gbanl', 18, col, -w / 2 - 14, -32, w + 28, 38, gateBannerLine);
     ctx.lineWidth = 3; ctx.strokeStyle = col; roundRect(x - w / 2 - 12, top - 30, w + 24, 34, 8); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = '900 22px ' + fontFam; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.font = '900 22px ' + fontFam; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(st === 'good' ? '✓' : st === 'bad' ? '✗' : '?', x, top - 12);
     // cones
     drawCone(x - w / 2 - 16, GROUND_Y); drawCone(x + w / 2 + 16, GROUND_Y);
@@ -739,10 +827,12 @@
     T.mid = [T.hc[0] + dx * 0.45, T.hc[1] + dy * 0.45];
     // pants seat: one smooth rounded block joining both thighs under the hem (same color as the legs)
     seg(c, [[hip[0] - u[0] * 0.5, hip[1] - u[1] * 0.5], [hip[0] + u[0] * 5, hip[1] + u[1] * 5]], 10.5, '#2b2f4a');
-    c.save();
-    if (L.glow) { c.shadowColor = L.glow; c.shadowBlur = 12; }
+    if (L.glow) {   // glow sprite of the same torso shape in its own frame (length rounded to 1/4 unit), then the crisp shirt
+      var lq = Math.round(len * 4) / 4;
+      c.save(); c.translate(hip[0], hip[1]); c.rotate(Math.atan2(u[1], u[0]));
+      glow(c, 'torso' + lq, 12, L.glow, -6, -10, lq + 15, 20, torsoShape(lq)); c.restore();
+    }
     torsoPath(c, hip, sh, T); c.fillStyle = L.shirt; c.fill();
-    c.restore();
     c.save(); torsoPath(c, hip, sh, T); c.clip();
     if (L.stripe) seg(c, [[T.hc[0] - u[0] * 4 + n[0] * 0.6, T.hc[1] - u[1] * 4 + n[1] * 0.6], [sh[0] + u[0] * 9 + n[0] * 0.6, sh[1] + u[1] * 9 + n[1] * 0.6]], 3, L.stripe);
     // waistband / hem band in the darker shirt shade, following the curved hem
@@ -753,6 +843,13 @@
     c.stroke();
     c.restore();
   }
+  function torsoShape(len) {
+    return function (g) {
+      var T = { u: [1, 0], n: [0, 1], ws: 7.3, wh: 6.3, hc: [1.2, 0] }; T.mid = [T.hc[0] + len * 0.45, 0];
+      torsoPath(g, [0, 0], [len, 0], T); g.fillStyle = '#000'; g.fill();
+    };
+  }
+  function helmetShape(g) { g.fillStyle = '#000'; g.beginPath(); g.arc(0, 0, 10, Math.PI * 1.02, Math.PI * 2.02); g.closePath(); g.fill(); }
   // mohawk row of short, round-tipped metal spikes along the top of the helmet (side view)
   function drawSpikes(c, cx, cy, R, col) {
     var N = 6, a0 = Math.PI * 1.2, a1 = Math.PI * 1.8, half = 0.075 * Math.PI;
@@ -772,12 +869,12 @@
   function starPath(c, x, y, R) { c.beginPath(); for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? R * 0.45 : R; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); }
   function drawHelmet(c, hx, hy, L) {
     var cx = hx, cy = hy - 1, R = 10, pat = L.helmetPattern, ac = L.helmetAccent;
+    if (pat === 'diamond') glowAt(c, cx, cy, 'helm', 9, '#bfefff', -11, -11, 22, 12, helmetShape);
     c.save();
     c.beginPath(); c.arc(cx, cy, R, Math.PI * 1.02, Math.PI * 2.02); c.closePath();
     if (pat === 'chrome') { var g = c.createLinearGradient(cx - R, cy - R, cx + R, cy); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#c9ceda'); g.addColorStop(0.7, '#6f7390'); g.addColorStop(1, '#e9ecf5'); c.fillStyle = g; }
     else c.fillStyle = L.helmet;
-    if (pat === 'diamond') { c.shadowColor = '#bfefff'; c.shadowBlur = 9; }
-    c.fill(); c.shadowBlur = 0; c.clip();
+    c.fill(); c.clip();
     c.fillStyle = ac;
     if (pat === 'stripe') c.fillRect(cx - 3, cy - R - 0.5, 3, R);
     else if (pat === 'double') { c.fillRect(cx - 5, cy - R, 2, R); c.fillRect(cx - 1, cy - R, 2, R); }
@@ -810,15 +907,24 @@
     else if (pat === 'stars') { [[0.12, 0.3], [0.3, 0.7], [0.47, 0.25], [0.63, 0.65], [0.82, 0.35], [0.93, 0.7]].forEach(function (p) { c.fillRect(x0 + (x1 - x0) * p[0], yTop + h * p[1] - 0.6, 1.3, 1.3); }); }
   }
   function rainbowGrad(c, x0, x1) {
-    var g = c.createLinearGradient(x0, 0, x1, 0);
-    ['#ff4f8b', '#ffb35c', '#ffe04d', '#3ee08f', '#39c6ff', '#8a4dff'].forEach(function (col, i) { g.addColorStop(i / 5, col); });
-    return g;
+    return grad(c, 'rainbow' + x0 + ',' + x1, function () {
+      var g = c.createLinearGradient(x0, 0, x1, 0);
+      ['#ff4f8b', '#ffb35c', '#ffe04d', '#3ee08f', '#39c6ff', '#8a4dff'].forEach(function (col, i) { g.addColorStop(i / 5, col); });
+      return g;
+    });
   }
+  function ringShape(r, lw) { return function (g) { g.strokeStyle = '#000'; g.lineWidth = lw; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke(); }; }
+  function segShape(pts, w) { return function (g) { seg(g, pts, w, '#000'); }; }
+  function segBox(pts, w) { var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(function (p) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }); return [x0 - w, y0 - w, x1 - x0 + w * 2, y1 - y0 + w * 2]; }
+  // glow for a stroked polyline, then the crisp stroke (same as seg() under shadowBlur before)
+  function glowSeg(c, key, blur, gcol, pts, w, col) {
+    if (gcol) { var bx = segBox(pts, w); glow(c, key, blur, gcol, bx[0], bx[1], bx[2], bx[3], segShape(pts, w)); }
+    seg(c, pts, w, col);
+  }
+  var WHEEL_R38 = circleShape(3.8), WHEEL_R6 = circleShape(6), HUB_R = circleShape(2.4), BMX_RING = ringShape(12.4, 3.2);
   function bmxWheel(c, p, R, L) {
-    c.save();
-    if (L.wheelGlow) { c.shadowColor = L.tire; c.shadowBlur = 8; }
+    if (L.wheelGlow) glowAt(c, p[0], p[1], 'bring', 8, L.tire, -15, -15, 30, 30, R === 14 ? BMX_RING : ringShape(R - 1.6, 3.2));
     c.strokeStyle = L.tire; c.lineWidth = 3.2; c.beginPath(); c.arc(p[0], p[1], R - 1.6, 0, Math.PI * 2); c.stroke();
-    c.restore();
     c.strokeStyle = '#c9ceda'; c.lineWidth = 1; c.beginPath(); c.arc(p[0], p[1], R - 3.6, 0, Math.PI * 2); c.stroke();
     c.strokeStyle = 'rgba(220,224,236,0.6)'; c.lineWidth = 0.6; c.beginPath();
     for (var i = 0; i < 8; i++) { var a = i * Math.PI / 4; c.moveTo(p[0], p[1]); c.lineTo(p[0] + Math.cos(a) * (R - 3.8), p[1] + Math.sin(a) * (R - 3.8)); }
@@ -848,10 +954,10 @@
     c.fillStyle = '#c9ceda'; c.fillRect(FW[0] - 4, FW[1] - 1.5, 8, 3);                 // front peg
     seg(c, [HT, FW], 3, fs); seg(c, [HT, HB], 4.4, fs);
     c.save();
-    if (L.barGlow) { c.shadowColor = L.bar; c.shadowBlur = 8; }
+    var bg = L.barGlow ? L.bar : null;
     c.translate(13, 0); c.scale(pose.barX == null ? 1 : pose.barX, 1); c.translate(-13, 0);
-    seg(c, [HT, [12, -52]], 3, '#9aa0b5'); seg(c, [[12, -52], [10, -59]], 3, L.bar); seg(c, [[7, -59], [17, -59]], 3, L.bar);
-    seg(c, [[13, -59], [18, -59]], 4, '#16121f');
+    glowSeg(c, 'bb1', 8, bg, [HT, [12, -52]], 3, '#9aa0b5'); glowSeg(c, 'bb2', 8, bg, [[12, -52], [10, -59]], 3, L.bar); glowSeg(c, 'bb3', 8, bg, [[7, -59], [17, -59]], 3, L.bar);
+    glowSeg(c, 'bb4', 8, bg, [[13, -59], [18, -59]], 4, '#16121f');
     c.restore();
     c.restore();
   }
@@ -859,9 +965,10 @@
     var L = r.look || lookFor(r);
     c.save(); c.translate(0, -9); c.rotate(pose.boardRot || 0); c.scale(pose.spinX == null ? 1 : pose.spinX, pose.flipY == null ? 1 : pose.flipY);
     c.fillStyle = '#9aa0b5'; c.fillRect(-24, 0, 8, 3); c.fillRect(16, 0, 8, 3);
-    if (L.wheelGlow) { c.save(); c.shadowColor = L.wheel; c.shadowBlur = 8; }
-    c.fillStyle = L.wheel; [-21, 21].forEach(function (x) { c.beginPath(); c.arc(x, 5, 3.8, 0, Math.PI * 2); c.fill(); });
-    if (L.wheelGlow) c.restore();
+    c.fillStyle = L.wheel; [-21, 21].forEach(function (x) {
+      if (L.wheelGlow) glowAt(c, x, 5, 'swheel', 8, L.wheel, -4, -4, 8, 8, WHEEL_R38);
+      c.beginPath(); c.arc(x, 5, 3.8, 0, Math.PI * 2); c.fill();
+    });
     seg(c, [[-35, -6], [-27, -1], [27, -1], [35, -6]], 5, L.deckPattern === 'holo' ? rainbowGrad(c, -35, 35) : L.deck);
     if (L.deckPattern === 'split') seg(c, [[0, -1], [27, -1], [35, -6]], 5, L.deckAccent);
     else deckPattern(c, L.deckPattern, L.deckAccent, -27, 27, -3.5, 5);
@@ -881,20 +988,20 @@
     c.fillStyle = '#16121f'; c.fillRect(-24, -13, 42, 1.5);
     c.fillStyle = '#9aa0b5'; c.fillRect(-31, -14, 8, 2.5);
     wheel(c, -25, -6, L); c.restore();
-    // stem, fork, front wheel
-    if (L.barGlow) { c.shadowColor = L.bar; c.shadowBlur = 8; }
-    seg(c, [[26, -6], [22, -14], [18, -79]], 4, L.bar);
-    wheel(c, 26, -6, L);
+    // stem, fork, front wheel (with glowing bars, everything from here on glows in the bar color)
+    var bg = L.barGlow ? L.bar : null;
+    glowSeg(c, 'sstem', 8, bg, [[26, -6], [22, -14], [18, -79]], 4, L.bar);
+    wheel(c, 26, -6, L, bg);
     c.save(); c.translate(18, -79); c.scale(pose.barX == null ? 1 : pose.barX, 1);
-    seg(c, [[-8, 0], [8, 0]], 4, L.bar); seg(c, [[-9, 0], [-5, 0]], 5, '#16121f'); seg(c, [[5, 0], [9, 0]], 5, '#16121f');
+    glowSeg(c, 'sbar', 8, bg, [[-8, 0], [8, 0]], 4, L.bar); glowSeg(c, 'sgripL', 8, bg, [[-9, 0], [-5, 0]], 5, '#16121f'); glowSeg(c, 'sgripR', 8, bg, [[5, 0], [9, 0]], 5, '#16121f');
     c.restore();
     c.restore();
   }
-  function wheel(c, x, y, L) {
-    var col = (L && L.wheel) || '#16121f';
-    if (L && L.wheelGlow) { c.save(); c.shadowColor = col; c.shadowBlur = 8; }
+  function wheel(c, x, y, L, outerGlow) {   // outerGlow: glow color already active around this wheel (scooter bars)
+    var col = (L && L.wheel) || '#16121f', gc = L && L.wheelGlow ? col : outerGlow;
+    if (gc) glowAt(c, x, y, 'wheel6', 8, gc, -6.5, -6.5, 13, 13, WHEEL_R6);
     c.fillStyle = col; c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill();
-    if (L && L.wheelGlow) c.restore();
+    if (outerGlow) glowAt(c, x, y, 'hub', 8, outerGlow, -3, -3, 6, 6, HUB_R);
     c.fillStyle = '#9aa0b5'; c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill();
   }
   function roundRectC(c, x, y, w, h, rr) { c.beginPath(); c.moveTo(x + rr, y); c.arcTo(x + w, y, x + w, y + h, rr); c.arcTo(x + w, y + h, x, y + h, rr); c.arcTo(x, y + h, x, y, rr); c.arcTo(x, y, x + w, y, rr); c.closePath(); }
@@ -967,10 +1074,9 @@
     ctx.fillStyle = '#1a1030';
     var n = Math.max(2, Math.round((b - a) / 55));
     for (var i = 0; i <= n; i++) { var px = a + 6 + (b - a - 12) * i / n; ctx.fillRect(px - 2.5, y, 5, GRIND.railH - 2); ctx.fillRect(px - 6, GROUND_Y - 4, 12, 3); }
-    var glow = curPlace && curPlace.railGlow;
-    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 12; }
-    ctx.fillStyle = glow || '#b8bccf'; ctx.fillRect(a, y - 2, b - a, 5);
-    ctx.shadowBlur = 0;
+    var gc = curPlace && curPlace.railGlow, rw = Math.round((b - a) * 10) / 10;
+    if (gc) glowAt(ctx, a, y - 2, 'rail' + rw, 12, gc, 0, 0, rw, 5, rectShape(rw, 5));
+    ctx.fillStyle = gc || '#b8bccf'; ctx.fillRect(a, y - 2, b - a, 5);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(a, y - 2, b - a, 1.4);
     ctx.fillStyle = '#ff7a3d'; ctx.fillRect(a, y + 2, b - a, 1.2);
     ctx.fillStyle = '#6f7390'; ctx.fillRect(a - 1, y - 3, 3, 7); ctx.fillRect(b - 2, y - 3, 3, 7);
@@ -1000,7 +1106,7 @@
   var el = {
     score: $('#score'), streak: $('#streak'), mult: $('#mult'), multChip: $('#multChip'), time: $('#time'), timeBar: $('#timeBar'), timeChip: $('.timeChip'),
     banner: $('#banner'), prompt: $('#prompt'), gateBar: $('#gateBar i'), typed: $('#typed'), display: $('#display'),
-    menu: $('#menu'), end: $('#end'), pause: $('#pause'), choices: $$('.choice')
+    menu: $('#menu'), end: $('#end'), pause: $('#pause'), quitAsk: $('#quitAsk'), choices: $$('.choice')
   };
 
   // ---------- round flow ----------
@@ -1009,8 +1115,8 @@
     audio();
     G.screen = 'play'; G.score = 0; G.streak = 0; G.topStreak = 0; G.correct = 0; G.wrong = 0; G.timeLeft = ROUND_SECONDS;
     G.roundMissed = []; G.lastKey = null; G.particles = []; G.pops = []; G.trick = null; G.wipeT = -1; G.gateState = 'none'; G.prob = null; G.paused = false; G.sinceGrind = 0; G.lastWasGrind = false;
-    G.roundGrinds = 0; G.coinParts = { answers: 0, streak: 0, grinds: 0, bonus: 0 };
-    el.menu.classList.remove('show'); el.end.classList.remove('show'); el.pause.classList.remove('show');
+    G.roundGrinds = 0; G.coinParts = { answers: 0, streak: 0, grinds: 0, bonus: 0 }; G.passed = false; G.dusted = false;
+    el.menu.classList.remove('show'); el.end.classList.remove('show'); el.pause.classList.remove('show'); el.quitAsk.classList.remove('show');
     setPhase('ready'); el.banner.className = ''; el.prompt.textContent = 'READY…'; el.gateBar.style.width = '0%';
     clearInput(); updateHUD(); applyMode();
   }
@@ -1050,7 +1156,7 @@
     G.coinParts.answers += COINS.perCorrect; G.coinParts.streak += (m - 1) * COINS.perMultStep;
     G.gateState = 'good'; G.boostSpeed = Math.max(G.speed, G.gateDist / 0.38);
     if (G.trick.grind) startGrind();
-    if (SNAP_STREAKS.indexOf(G.streak) >= 0) { var snapStreak = G.streak, perf = G.trick; setTimeout(function () { takeSnapshot(snapStreak, perf); }, 60); }
+    if (SNAP_STREAKS.indexOf(G.streak) >= 0) queueSnap(G.streak, G.trick);
     el.banner.className = 'right'; flashDisplay('flashR');
     if (settings.mode === 'choices') el.choices.forEach(function (b) { if (Number(b.textContent) === p.answer) b.classList.add('good'); });
     pop('+' + pts + '  ' + G.trick.name, '#ffc94d');
@@ -1109,8 +1215,9 @@
     if (!box.children.length) box.innerHTML = '<div class="none">Clean round — nothing to practice!</div>';
     el.banner.className = 'hide'; el.end.classList.add('show');
     refreshMenu();
+    flushSnaps();
   }
-  function toMenu() { G.screen = 'menu'; setPhase('idle'); G.gateState = 'none'; el.end.classList.remove('show'); el.pause.classList.remove('show'); el.menu.classList.add('show'); el.banner.className = 'hide'; refreshMenu(); }
+  function toMenu() { G.screen = 'menu'; setPhase('idle'); G.gateState = 'none'; el.end.classList.remove('show'); el.pause.classList.remove('show'); el.quitAsk.classList.remove('show'); el.menu.classList.add('show'); el.banner.className = 'hide'; refreshMenu(); flushSnaps(); }
 
   // ---------- update ----------
   function update(dt) {
@@ -1131,7 +1238,7 @@
         if (G.gateDist <= 0) { G.gateDist = 0; onWrong('time'); }
       } else if (G.phase === 'boost' && G.trick && G.trick.grind) {
         var t0 = G.trickT; G.trickT += dt;
-        var d = grindTravel(G.trickT) - grindTravel(t0); spd = d / dt;
+        var d = grindTravel(G.trickT) - grindTravel(t0); if (dt > 0) spd = d / dt;
         G.grindTrav += d; G.gateDist -= d;
         if (G.gateDist <= 0 && !G.passed) { G.passed = true; burst(riderX() + 10, GROUND_Y - 70, 18, ['#19c3c0', '#ffc94d', '#ff4f8b', '#fff'], 110); }
         if (G.trickT > GRIND.land && G.trickT < GRIND.off) sparks(riderX() - 10, GROUND_Y - GRIND.railH, 4);
@@ -1227,6 +1334,7 @@
     if (G.screen === 'menu' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen === 'end' && e.key === 'Enter') { startRound(); e.preventDefault(); return; }
     if (G.screen !== 'play') return;
+    if (quitAskOpen()) { if (e.key === 'Escape') keepPlaying(); return; }
     if (e.key === 'Escape' || e.key === 'p') { togglePause(); return; }
     if (settings.mode === 'choices') { if (e.key >= '1' && e.key <= '3') { chooseIdx(Number(e.key) - 1); press(el.choices[Number(e.key) - 1]); } return; }
     if (/^[0-9]$/.test(e.key)) { typeDigit(e.key); var kb = $('.key[data-k="' + e.key + '"]'); if (kb) press(kb); }
@@ -1239,16 +1347,25 @@
   document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
   document.addEventListener('touchmove', function (e) { if (!e.target.closest('.overlay')) e.preventDefault(); }, { passive: false });
 
+  function quitAskOpen() { return el.quitAsk.classList.contains('show'); }
   function togglePause(force) {
     if (G.screen !== 'play') return;
-    G.paused = force != null ? force : !G.paused;
+    var p = force != null ? force : !G.paused;
+    if (quitAskOpen()) { if (!p) el.pause.classList.remove('show'); return; }   // the quit question keeps the round paused
+    G.paused = p;
     el.pause.classList.toggle('show', G.paused);
   }
-  document.addEventListener('visibilitychange', function () { if (document.hidden) togglePause(true); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { togglePause(true); flushSnaps(true); } });
+  window.addEventListener('pagehide', function () { flushSnaps(true); });
   $('#resumeBtn').addEventListener('click', function () { audio(); togglePause(false); });
+  // quit ✕ asks first (the round is paused meanwhile); a mis-tap near the notch no longer throws the round away
+  function askQuit() { if (G.screen !== 'play') return; G.paused = true; el.pause.classList.remove('show'); el.quitAsk.classList.add('show'); }
+  function keepPlaying() { el.quitAsk.classList.remove('show'); audio(); if (!el.pause.classList.contains('show')) G.paused = false; }
+  $('#keepBtn').addEventListener('click', keepPlaying);
+  $('#quitYes').addEventListener('click', function () { el.quitAsk.classList.remove('show'); if (G.screen === 'play') { G.paused = false; toMenu(); } });
   // iOS only lets audio resume inside a gesture, and touch pointerdown doesn't count: retry on any touchend
   document.addEventListener('touchend', function () { if (actx && actx.state !== 'running') audio(); }, { passive: true });
-  $('#quitBtn').addEventListener('click', function () { if (G.screen === 'play') toMenu(); });
+  $('#quitBtn').addEventListener('click', askQuit);
   $('#muteBtn').addEventListener('click', function () { settings.muted = !settings.muted; store.set('muted', settings.muted); $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊'; });
   $('#muteBtn').textContent = settings.muted ? '🔇' : '🔊';
   $('#startBtn').addEventListener('click', startRound);
@@ -1280,6 +1397,7 @@
     $$('#modePick button').forEach(function (b) { b.addEventListener('click', function () { settings.mode = b.getAttribute('data-mode'); store.set('mode', settings.mode); refreshMenu(); applyMode(); }); });
   }
   function refreshMenu() {
+    previewsDirty = true;
     $$('.rider').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-id') === settings.rider); });
     $$('.lvl').forEach(function (b) {
       var id = Number(b.getAttribute('data-level')), best = getBest(id);
@@ -1291,17 +1409,20 @@
     $('#practiceNote').textContent = n ? n + ' tricky fact' + (n > 1 ? 's' : '') + ' saved for this level — they’ll show up more often.' : 'Missed facts get saved and come back more often until you nail them.';
   }
   function applyMode() { document.body.classList.toggle('mode-choices', settings.mode === 'choices'); }
+  var previewsDirty = true;
   function drawPreviews() {
     if (placeThumbsDirty) placeThumbsDirty = !placeThumbs.every(function (p) { return paintPlaceThumb(p.c, p.id); });
+    var redrawAll = previewsDirty; previewsDirty = false;
     previews.forEach(function (pv) {
-      var c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
-      var d = Math.min(window.devicePixelRatio || 1, 3); if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+      var sel = pv.r.id === settings.rider, c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
+      if (!sel && !redrawAll && pv.w === w && pv.h === h) return;   // only the selected ride animates; the others are drawn once (again if their size changes)
+      pv.w = w; pv.h = h;
+      var d = screenDpr(); if (c.width !== Math.round(w * d) || c.height !== Math.round(h * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
       var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0);
-      var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#5b2166'); g.addColorStop(0.7, '#e8574a'); g.addColorStop(1, '#ffb35c');
-      x.fillStyle = g; x.fillRect(0, 0, w, h);
+      x.fillStyle = grad(x, 'bg' + h, function () { var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#5b2166'); g.addColorStop(0.7, '#e8574a'); g.addColorStop(1, '#ffb35c'); return g; });
+      x.fillRect(0, 0, w, h);
       x.fillStyle = 'rgba(255,230,150,0.9)'; x.beginPath(); x.arc(w * 0.75, h * 0.62, h * 0.22, 0, Math.PI * 2); x.fill();
       x.fillStyle = '#26143a'; x.fillRect(0, h - 14, w, 14);
-      var sel = pv.r.id === settings.rider;
       drawRider(x, w / 2 - 4, h - 12, h / 150, dress(pv.r), sel ? trickPose(pv.r.tricks[1].id, (G.t * 0.55) % 1.6 < 0.8 ? ((G.t * 0.55) % 1.6) / 0.8 : 0) : idlePose(G.t));
     });
   }
@@ -1326,7 +1447,7 @@
     });
     var cat = GEAR_CATS.filter(function (x) { return x.id === shopCat; })[0];
     $('#shopHint').textContent = cat.rider ? 'For the ' + riderById(cat.rider).name + (rideUnlocked(riderById(cat.rider)) ? '.' : ' (ride unlocks with a goal, see GOALS; gear can be bought now).') : 'Works on every ride. Preview shows your ' + riderById(settings.rider).name.toLowerCase() + '.';
-    var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = [];
+    var grid = $('#shopGrid'); grid.innerHTML = ''; shopCards = []; shopDirty = true;
     var stats = getStats(), coins = getCoins();
     GEAR.filter(function (it) { return it.cat === shopCat; }).forEach(function (it) {
       var card = document.createElement('div'), own = owns(it.id), eq = gear.equipped[it.cat] === it.id, unlocked = isUnlocked(it, stats);
@@ -1361,10 +1482,14 @@
     });
   }
   function purchaseFailed() { buildShop(); $('#shopHint').textContent = 'Couldn\u2019t save on this device, so nothing was bought and no coins were spent.'; }
-  function drawShopPreviews() {
+  var shopDirty = true;
+  function drawShopPreviews() {   // drawn once per build (buy / equip / tab rebuild the shop), and again if a card's size changes
+    var all = shopDirty; shopDirty = false;
     shopCards.forEach(function (pv, i) {
       var c = pv.c, w = c.clientWidth, h = c.clientHeight; if (!w || !h) return;
-      var d = Math.min(window.devicePixelRatio || 1, 3); if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+      if (!all && pv.w === w && pv.h === h) return;
+      pv.w = w; pv.h = h;
+      var d = screenDpr(); if (c.width !== Math.round(w * d) || c.height !== Math.round(h * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
       var x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0);
       var g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#4a1d5e'); g.addColorStop(0.75, '#d2505a'); g.addColorStop(1, '#ffb35c');
       x.fillStyle = g; x.fillRect(0, 0, w, h);
@@ -1583,7 +1708,7 @@
   function fmtDate(ms) { try { return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { var d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(); } }
   function renderSnapCard(dressedRider, trick, entry) {
     var W = SNAP_W, H = SNAP_H, cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
-    var x = cnv.getContext('2d');
+    var x = cnv.getContext('2d'); x.__card = true;
     var saved = { ctx: ctx, VW: VW, TOP: TOP, wx: G.worldX, parts: G.particles, cp: curPlace };
     var LVW = 260, k = W / LVW, LVH = H / k, rx = LVW * 0.5;
     try {
@@ -1627,16 +1752,39 @@
     x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,0.35)'; roundRectC(x, 10, 10, W - 20, H - 20, 22); x.stroke();
     return cnv.toDataURL('image/jpeg', SNAP_Q);
   }
-  function takeSnapshot(streak, performed) {   // -> Promise of the saved entry (or null)
-    var r = rider(), dressed = dress(r), lvl = settings.level, lvlName = level().name, place = settings.place;
+  // H2: nothing heavy happens during play. At the streak we only record what's needed to draw the card (ride with its
+  // gear, the trick just done, level, place, time) and show the toast; the card is drawn, JPEG-encoded and stored after
+  // the round (end screen / menu), one card per idle slot. Leaving the page mid-round saves them right away.
+  function snapState() { var r = rider(); return { r: r, dressed: dress(r), level: settings.level, levelName: level().name, place: settings.place, t: Date.now() }; }
+  function queueSnap(streak, performed) {
+    var s = snapState(); s.streak = streak; s.performed = performed;
+    G.pendingSnaps.push(s); showSnapToast();
+  }
+  var snapBusy = false;
+  var whenIdle = window.requestIdleCallback ? function (fn) { window.requestIdleCallback(fn, { timeout: 700 }); } : function (fn) { setTimeout(fn, 80); };
+  function flushSnaps(now) {   // now = page is being hidden: save everything immediately
+    if (!G.pendingSnaps.length) return;
+    if (now) { while (G.pendingSnaps.length) { var q = G.pendingSnaps.shift(); takeSnapshot(q.streak, q.performed, q); } return; }
+    if (snapBusy) return;
+    snapBusy = true;
+    whenIdle(function () {
+      if ((G.screen === 'play' && !G.paused) || !G.pendingSnaps.length) { snapBusy = false; return; }   // a round is on: wait for it to end
+      var q = G.pendingSnaps.shift();
+      var next = function () { snapBusy = false; flushSnaps(); };
+      takeSnapshot(q.streak, q.performed, q).then(next, next);
+    });
+  }
+  function takeSnapshot(streak, performed, state) {   // -> Promise of the saved entry (or null); state = captured at the streak
+    var s = state || snapState(), r = s.r;
     return albumRun(function () {
-      var trick = chooseSnapTrick(r, performed, album.list), now = Date.now(), img;
-      var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, n: nextSeq(), rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: lvl, levelName: lvlName, place: place };
-      try { img = renderSnapCard(dressed, trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
+      var trick = chooseSnapTrick(r, performed, album.list), now = s.t, img;
+      var entry = { id: now.toString(36) + Math.random().toString(36).slice(2, 6), t: now, n: nextSeq(), rider: r.id, trick: trick.id, trickName: trick.name, streak: streak, level: s.level, levelName: s.levelName, place: s.place };
+      try { img = renderSnapCard(s.dressed, trick, entry); } catch (e) { console.warn('snapshot failed', e); return null; }
       entry.kb = Math.round(img.length * 0.75 / 1024);
       return albumAdd(entry, img).then(function (ok) {
         if (!ok) return null;
-        showSnapToast(); refreshAlbumCount();
+        if (!state) showSnapToast();
+        refreshAlbumCount();
         entry.img = img; return entry;
       });
     });
@@ -1711,7 +1859,7 @@
 
   // ---------- place picker + goals screen ----------
   var placeThumbs = [], placeThumbsDirty = true;
-  function dprOf() { return Math.min(window.devicePixelRatio || 1, 3); }
+  function dprOf() { return screenDpr(); }
   function paintPlaceThumb(cnv, placeId) {
     var w = cnv.clientWidth, h = cnv.clientHeight; if (!w || !h) return false;
     var d = dprOf(); cnv.width = Math.round(w * d); cnv.height = Math.round(h * d);
@@ -1794,10 +1942,33 @@
   $('#goalsClose').addEventListener('click', closeGoals);
 
   // ---------- loop ----------
-  var last = performance.now();
+  var last = performance.now(), coverAt = 0, covered = false, coverScreen = '';
+  // the scene is skipped while the round is paused, or when an open screen's panel covers the whole canvas
+  // (the canvas keeps its last picture; the photo viewer is 96% opaque, so it always counts as covering)
+  function coveredByOverlay() {
+    var r = cv.getBoundingClientRect(); if (!r.width || !r.height) return true;
+    var ovs = $$('.overlay.show');
+    for (var i = 0; i < ovs.length; i++) {
+      if (ovs[i].id === 'viewer' || ovs[i].id === 'pilotEnded') return true;
+      var p = ovs[i].querySelector('.panel'); if (!p) continue;
+      var q = p.getBoundingClientRect();
+      if (q.left <= r.left + 1 && q.top <= r.top + 1 && q.right >= r.right - 1 && q.bottom >= r.bottom - 1) return true;
+    }
+    return false;
+  }
+  function sceneHidden(now) {
+    if (G.screen === 'play') return G.paused;
+    if (now - coverAt > 250 || G.screen !== coverScreen) { coverAt = now; coverScreen = G.screen; covered = coveredByOverlay(); }
+    return covered;
+  }
+  window.__tt.renders = 0;
   function frame(now) {
-    var dt = Math.min(0.05, (now - last) / 1000); last = now;
-    try { update(dt); render(); if (G.screen === 'menu') drawPreviews(); else if (G.screen === 'shop') drawShopPreviews(); } catch (err) { console.error(err); }
+    var dt = clamp((now - last) / 1000, 0, 0.05); last = now;
+    try {
+      update(dt);
+      if (needRender || !sceneHidden(now)) { render(); needRender = false; window.__tt.renders++; }
+      if (G.screen === 'menu') drawPreviews(); else if (G.screen === 'shop') drawShopPreviews();
+    } catch (err) { console.error(err); }
     requestAnimationFrame(frame);
   }
   // ===== PILOT / PREVIEW LINK GATE =====
@@ -1828,7 +1999,7 @@
   function pilotExpired() { return !!pilot && Date.now() > pilot.until.ms; }
   function showPilotEnded() {
     G.screen = 'expired'; setPhase('idle');
-    [el.menu, el.end, el.pause, $('#shop'), $('#album'), $('#viewer'), $('#goals')].forEach(function (o) { o.classList.remove('show'); });
+    [el.menu, el.end, el.pause, el.quitAsk, $('#shop'), $('#album'), $('#viewer'), $('#goals')].forEach(function (o) { o.classList.remove('show'); });
     el.banner.className = 'hide'; $('#pilotEnded').classList.add('show');
   }
   function pilotLabel() {
