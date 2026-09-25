@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#1a1030" />
+<title>Times Tricks — Multiplication Street Runner</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <button id="quitBtn" class="hbtn" aria-label="Quit to menu">✕</button>
+    <div class="chip"><small>SCORE</small><b id="score">0</b></div>
+    <div class="chip" id="multChip"><small>STREAK</small><b><span id="streak">0</span> <em id="mult">x1</em></b></div>
+    <div class="chip timeChip"><small>TIME</small><b id="time">75</b><i id="timeBar"></i></div>
+    <button id="muteBtn" class="hbtn" aria-label="Sound on/off">🔊</button>
+  </header>
+
+  <section id="scene">
+    <canvas id="cv"></canvas>
+    <div id="banner"><div id="prompt">&nbsp;</div><div id="gateBar"><i></i></div></div>
+  </section>
+
+  <section id="controls">
+    <div id="padWrap">
+      <div id="display"><span id="typed"></span><span class="caret"></span></div>
+      <div id="pad">
+        <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button><button class="key" data-k="3">3</button>
+        <button class="key" data-k="4">4</button><button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
+        <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>
+        <button class="key del" data-k="del" aria-label="Delete">⌫</button><button class="key" data-k="0">0</button><button class="key go" data-k="go">GO</button>
+      </div>
+    </div>
+    <div id="choices">
+      <button class="choice" data-i="0"></button><button class="choice" data-i="1"></button><button class="choice" data-i="2"></button>
+    </div>
+  </section>
+
+  <!-- Start screen -->
+  <div id="menu" class="overlay show">
+    <div class="panel">
+      <h1 class="logo">TIMES<span>TRICKS</span></h1>
+      <p class="sub">Answer fast. Land tricks. Don't wipe out.</p>
+
+      <h2>Pick your ride</h2>
+      <div id="riderPick" class="riders"></div>
+
+      <h2>Level</h2>
+      <div id="levelPick" class="levels"></div>
+
+      <h2>Answer with</h2>
+      <div class="seg" id="modePick">
+        <button data-mode="pad">Number pad</button>
+        <button data-mode="choices">3 choices</button>
+      </div>
+
+      <button id="startBtn" class="big">DROP IN ▶</button>
+      <p id="practiceNote" class="note"></p>
+    </div>
+  </div>
+
+  <!-- End screen -->
+  <div id="end" class="overlay">
+    <div class="panel">
+      <h2 class="endTitle">ROUND OVER</h2>
+      <div id="newBest" class="newBest">NEW PERSONAL BEST!</div>
+      <div class="stats">
+        <div><small>SCORE</small><b id="eScore">0</b></div>
+        <div><small>BEST</small><b id="eBest">0</b></div>
+        <div><small>ACCURACY</small><b id="eAcc">0%</b></div>
+        <div><small>TOP STREAK</small><b id="eStreak">0</b></div>
+      </div>
+      <p id="eLine" class="note"></p>
+      <h2>Facts to practice</h2>
+      <div id="eFacts" class="facts"></div>
+      <button id="againBtn" class="big">RIDE AGAIN ▶</button>
+      <button id="menuBtn" class="big alt">MENU</button>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="overlay">
+    <div class="panel small"><h2 class="endTitle">PAUSED</h2><button id="resumeBtn" class="big">RESUME ▶</button></div>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
