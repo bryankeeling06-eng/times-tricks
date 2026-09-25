@@ -48,7 +48,7 @@ Everything is data in `game.js`:
 
 - **New item:** add one object to `GEAR`, e.g.
   `{ id: 'shirt_orange', cat: 'shirt', name: 'Traffic Cone', price: 70, color: '#ff7a3d', dark: '#c2521f' }`.
-  Look fields per category: shirts `color, dark, stripe?, glow?`; helmets `color, pattern, accent?` (`none, stripe, double, bolt, star, checker, flames, chrome`); boards/scooters `deck, wheel, pattern?, accent?, wheelGlow?` plus `bar` for scooters (`none, stripe, split, checker, flames, stars`).
+  Look fields per category: shirts `color, dark, stripe?, glow?`; helmets `color, pattern, accent?` (`none, stripe, double, bolt, star, checker, flames, chrome, spikes`); boards/scooters `deck, wheel, pattern?, accent?, wheelGlow?` plus `bar` for scooters (`none, stripe, split, checker, flames, stars`).
 - **Lock it behind a milestone:** add `unlock: '<achievement id>'`. Achievements live in `ACHIEVEMENTS` (text + a `progress(stats)` returning `[current, goal]`).
 - **New category:** add to `GEAR_CATS`. A category with `rider: '<id>'` applies to that ride; set `gearCat` on the rider.
 - **Coin tuning:** the `COINS` object.

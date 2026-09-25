@@ -62,7 +62,7 @@
   //   id (unique), cat (a GEAR_CATS id), name, price (coins; 0 = free starter, owned by default),
   //   optional unlock (an ACHIEVEMENTS id), plus the look fields for that category:
   //   shirt:   color, dark, [stripe], [glow]
-  //   helmet:  color, pattern ('none'|'stripe'|'double'|'bolt'|'star'|'checker'|'flames'|'chrome'), [accent]
+  //   helmet:  color, pattern ('none'|'stripe'|'double'|'bolt'|'star'|'checker'|'flames'|'chrome'|'spikes'), [accent]
   //   board / scooter: deck, wheel, [pattern ('none'|'stripe'|'split'|'checker'|'flames'|'stars')], [accent], [wheelGlow], [bar] (scooter)
   // A category with `rider` only applies to that ride (its rider has gearCat = that category id).
   // ======================================================================
@@ -90,6 +90,7 @@
     { id: 'helm_bolt', cat: 'helmet', name: 'Lightning', price: 90, color: '#19c3c0', pattern: 'bolt', accent: '#ffe04d' },
     { id: 'helm_checker', cat: 'helmet', name: 'Checkered', price: 120, color: '#f2f2f7', pattern: 'checker', accent: '#16121f' },
     { id: 'helm_flames', cat: 'helmet', name: 'Hot Flames', price: 150, color: '#16121f', pattern: 'flames', accent: '#ff7a3d' },
+    { id: 'helm_spikes', cat: 'helmet', name: 'Spike Crown', price: 160, color: '#23202e', pattern: 'spikes', accent: '#d5d9e6' },
     { id: 'helm_chrome', cat: 'helmet', name: 'Chrome Dome', price: 220, color: '#c9ceda', pattern: 'chrome', unlock: 'l3pb' },
     // Skateboards
     { id: 'board_classic', cat: 'board', name: 'Classic Orange', price: 0, deck: '#ff7a3d', wheel: '#f4e9d8' },
@@ -433,12 +434,8 @@
       c.fillStyle = '#f2f2f7'; c.beginPath(); c.ellipse(f[0] + 2, f[1] + 1, 6.5, 3, 0, 0, Math.PI * 2); c.fill();
       c.fillStyle = '#16121f'; c.fillRect(f[0] - 4.5, f[1] + 2.5, 13, 1.5);
     });
-    // torso (shirt)
-    if (L.glow) { c.save(); c.shadowColor = L.glow; c.shadowBlur = 12; }
-    seg(c, [hip, sh], 14, L.shirt);
-    if (L.glow) c.restore();
-    if (L.stripe) seg(c, [[hip[0] + 1, hip[1] - 2], [sh[0] + 1, sh[1] + 2]], 3, L.stripe);
-    c.fillStyle = L.shirtDark; c.beginPath(); c.arc(hip[0], hip[1], 7, 0, Math.PI * 2); c.fill();
+    // torso: tapered shirt with rounded shoulders and a curved hem over the pants (no hip ball)
+    drawTorso(c, hip, sh, L);
     // head + helmet
     c.fillStyle = '#c98b5e'; c.beginPath(); c.arc(head[0], head[1], 8.5, 0, Math.PI * 2); c.fill();
     drawHelmet(c, head[0], head[1], L);
@@ -446,6 +443,51 @@
     // front arm
     var e1 = ik(sh, hands[1], 14, 14, st.elbow[1]); seg(c, [sh, e1, hands[1]], 6, L.shirt);
     c.fillStyle = '#c98b5e'; hands.forEach(function (h) { c.beginPath(); c.arc(h[0], h[1], 3, 0, Math.PI * 2); c.fill(); });
+  }
+  function torsoPath(c, hip, sh, T) {
+    c.beginPath();
+    c.moveTo(T.hc[0] + T.n[0] * T.wh, T.hc[1] + T.n[1] * T.wh);
+    c.quadraticCurveTo(T.mid[0] + T.n[0] * (T.ws + 0.8), T.mid[1] + T.n[1] * (T.ws + 0.8), sh[0] + T.n[0] * T.ws, sh[1] + T.n[1] * T.ws);
+    c.arc(sh[0], sh[1], T.ws, Math.atan2(T.n[1], T.n[0]), Math.atan2(-T.n[1], -T.n[0]), true);   // rounded shoulders
+    c.quadraticCurveTo(T.mid[0] - T.n[0] * (T.ws + 0.4), T.mid[1] - T.n[1] * (T.ws + 0.4), T.hc[0] - T.n[0] * T.wh, T.hc[1] - T.n[1] * T.wh);
+    c.quadraticCurveTo(T.hc[0] - T.u[0] * 3.4, T.hc[1] - T.u[1] * 3.4, T.hc[0] + T.n[0] * T.wh, T.hc[1] + T.n[1] * T.wh);   // curved hem
+    c.closePath();
+  }
+  function drawTorso(c, hip, sh, L) {
+    var dx = sh[0] - hip[0], dy = sh[1] - hip[1], len = Math.hypot(dx, dy) || 1, u = [dx / len, dy / len], n = [-u[1], u[0]];
+    var T = { u: u, n: n, ws: 7.3, wh: 6.3, hc: [hip[0] + u[0] * 1.2, hip[1] + u[1] * 1.2] };
+    T.mid = [T.hc[0] + dx * 0.45, T.hc[1] + dy * 0.45];
+    // pants seat: one smooth rounded block joining both thighs under the hem (same color as the legs)
+    seg(c, [[hip[0] - u[0] * 0.5, hip[1] - u[1] * 0.5], [hip[0] + u[0] * 5, hip[1] + u[1] * 5]], 10.5, '#2b2f4a');
+    c.save();
+    if (L.glow) { c.shadowColor = L.glow; c.shadowBlur = 12; }
+    torsoPath(c, hip, sh, T); c.fillStyle = L.shirt; c.fill();
+    c.restore();
+    c.save(); torsoPath(c, hip, sh, T); c.clip();
+    if (L.stripe) seg(c, [[T.hc[0] - u[0] * 4 + n[0] * 0.6, T.hc[1] - u[1] * 4 + n[1] * 0.6], [sh[0] + u[0] * 9 + n[0] * 0.6, sh[1] + u[1] * 9 + n[1] * 0.6]], 3, L.stripe);
+    // waistband / hem band in the darker shirt shade, following the curved hem
+    c.strokeStyle = L.shirtDark; c.lineWidth = 2.6; c.lineCap = 'butt'; c.beginPath();
+    var b0 = [T.hc[0] + u[0] * 0.9, T.hc[1] + u[1] * 0.9];
+    c.moveTo(b0[0] + n[0] * (T.wh + 1), b0[1] + n[1] * (T.wh + 1));
+    c.quadraticCurveTo(b0[0] - u[0] * 3.4, b0[1] - u[1] * 3.4, b0[0] - n[0] * (T.wh + 1), b0[1] - n[1] * (T.wh + 1));
+    c.stroke();
+    c.restore();
+  }
+  // mohawk row of short, round-tipped metal spikes along the top of the helmet (side view)
+  function drawSpikes(c, cx, cy, R, col) {
+    var N = 6, a0 = Math.PI * 1.2, a1 = Math.PI * 1.8, half = 0.075 * Math.PI;
+    c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+    for (var i = 0; i < N; i++) {
+      var a = a0 + (a1 - a0) * i / (N - 1), hgt = 4.2 + Math.sin(Math.PI * i / (N - 1)) * 1.6;
+      var p1 = [cx + Math.cos(a - half) * (R - 0.6), cy + Math.sin(a - half) * (R - 0.6)], p2 = [cx + Math.cos(a + half) * (R - 0.6), cy + Math.sin(a + half) * (R - 0.6)];
+      var tip = [cx + Math.cos(a) * (R + hgt), cy + Math.sin(a) * (R + hgt)];
+      c.beginPath(); c.moveTo(p1[0], p1[1]); c.lineTo(tip[0], tip[1]); c.lineTo(p2[0], p2[1]); c.closePath();
+      c.fillStyle = col; c.fill(); c.strokeStyle = col; c.lineWidth = 1.6; c.stroke();   // stroke rounds the tip
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 0.7; c.beginPath();       // shine
+      c.moveTo((p1[0] * 2 + tip[0]) / 3, (p1[1] * 2 + tip[1]) / 3); c.lineTo((p1[0] + tip[0] * 2) / 3 + (p2[0] - p1[0]) * 0.1, (p1[1] + tip[1] * 2) / 3 + (p2[1] - p1[1]) * 0.1); c.stroke();
+    }
+    c.fillStyle = '#8a90a8'; c.beginPath(); c.arc(cx, cy, R - 0.2, a0 - half, a1 + half); c.arc(cx, cy, R - 1.8, a1 + half, a0 - half, true); c.closePath(); c.fill();  // metal base strip
+    c.restore();
   }
   function starPath(c, x, y, R) { c.beginPath(); for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? R * 0.45 : R; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); }
   function drawHelmet(c, hx, hy, L) {
@@ -470,6 +512,7 @@
     }
     else if (pat === 'chrome') { c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1.6; c.beginPath(); c.arc(cx - 1, cy - 1, 6.5, Math.PI * 1.15, Math.PI * 1.55); c.stroke(); }
     c.restore();
+    if (pat === 'spikes') drawSpikes(c, cx, cy, R, ac);
     c.fillStyle = pat === 'chrome' ? '#8a90a8' : L.helmet; c.fillRect(cx - 10, cy - 1, 20, 3);
   }
   function deckPattern(c, pat, ac, x0, x1, yTop, h) { // pattern on a straight deck section
